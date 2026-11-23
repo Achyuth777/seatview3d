@@ -1,0 +1,40 @@
+# SeatView3D + PostgreSQL 18.
+#   cp .env.example .env   # then set POSTGRES_PASSWORD
+#   docker compose up -d --build
+#   open http://localhost:3001
+services:
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: seatview
+      POSTGRES_USER: seatview
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U seatview -d seatview"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # Not published to the host: only the app container can reach the database.
+
+  app:
+    build: .
+    restart: unless-stopped
+    init: true # tini as PID 1: forwards SIGTERM to node so `docker compose stop` shuts down gracefully
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://seatview:${POSTGRES_PASSWORD}@db:5432/seatview
+      HOLD_MINUTES: ${HOLD_MINUTES:-10}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "${APP_PORT:-3001}:3001"
+    stop_grace_period: 20s
+
+volumes:
+  pgdata:

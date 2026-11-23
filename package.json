@@ -1,0 +1,48 @@
+{
+  "name": "seatview3d",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:offline": "vite --mode offline",
+    "server": "tsx server/index.ts",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "start": "npm run build && tsx server/index.ts --static"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "0.5.17",
+    "@fastify/compress": "9.3.0",
+    "@fastify/cors": "11.4.3",
+    "@fastify/helmet": "13.2.0",
+    "@fastify/rate-limit": "11.3.0",
+    "@fastify/static": "10.1.12",
+    "@fontsource/archivo": "5.3.0",
+    "@fontsource/big-shoulders-display": "5.3.0",
+    "@fontsource/big-shoulders-stencil-display": "5.3.0",
+    "@fontsource/doto": "5.3.0",
+    "@fontsource/martian-mono": "5.3.0",
+    "@react-three/fiber": "9.8.2",
+    "camera-controls": "3.1.2",
+    "fastify": "5.12.8",
+    "pg": "8.23.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "three": "0.187.0",
+    "tsx": "4.23.15"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "@types/pg": "8.23.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@types/three": "0.187.0",
+    "@vitejs/plugin-react": "6.3.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.8",
+    "vitest": "5.1.1"
+  },
+  "license": "MIT"
+}

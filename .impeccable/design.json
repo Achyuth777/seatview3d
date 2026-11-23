@@ -1,0 +1,468 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-23T04:36:56.630Z",
+  "title": "Design System: SeatView",
+  "extensions": {
+    "colorMeta": {
+      "steel": {
+        "role": "primary",
+        "displayName": "Night Coach Steel",
+        "canonical": "#11305c",
+        "tonalRamp": [
+          "#030b1a",
+          "#0b2448",
+          "#22426f",
+          "#416292",
+          "#6184b6",
+          "#83a7dc",
+          "#b2cbef",
+          "#e7effa"
+        ]
+      },
+      "steel-2": {
+        "role": "neutral",
+        "displayName": "Raised Steel",
+        "canonical": "#17396c",
+        "tonalRamp": [
+          "#030b1b",
+          "#07234d",
+          "#1f4175",
+          "#3e6198",
+          "#5e83bc",
+          "#7fa7e2",
+          "#b0cbf3",
+          "#e7effc"
+        ]
+      },
+      "steel-3": {
+        "role": "neutral",
+        "displayName": "Coach Panel Steel",
+        "canonical": "#1e4680",
+        "tonalRamp": [
+          "#020b1d",
+          "#022351",
+          "#18407a",
+          "#38619e",
+          "#5883c2",
+          "#7aa7e8",
+          "#adcbf8",
+          "#e6effd"
+        ]
+      },
+      "steel-line": {
+        "role": "neutral",
+        "displayName": "Steel Seam",
+        "canonical": "#4a72a8",
+        "tonalRamp": [
+          "#020b1b",
+          "#04244c",
+          "#1b4274",
+          "#3b6297",
+          "#5b84bb",
+          "#7da7e1",
+          "#afcbf3",
+          "#e6effc"
+        ]
+      },
+      "on-steel": {
+        "role": "neutral",
+        "displayName": "Chalk on Steel",
+        "canonical": "#eaf0f7",
+        "tonalRamp": [
+          "#0a0b0d",
+          "#22252a",
+          "#3e4248",
+          "#5d6268",
+          "#7e8389",
+          "#a0a6ac",
+          "#c6c9ce",
+          "#edeef0"
+        ]
+      },
+      "on-steel-2": {
+        "role": "neutral",
+        "displayName": "Faded Chalk",
+        "canonical": "#cdd9e8",
+        "tonalRamp": [
+          "#080b0f",
+          "#1e262f",
+          "#39434f",
+          "#58626f",
+          "#798391",
+          "#9ba6b4",
+          "#c2cad4",
+          "#eceff2"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Chart Paper",
+        "canonical": "#eff1ec",
+        "tonalRamp": [
+          "#0b0b0a",
+          "#242622",
+          "#41433f",
+          "#60625e",
+          "#81837f",
+          "#a4a6a1",
+          "#c8cac6",
+          "#eeeeed"
+        ]
+      },
+      "paper-2": {
+        "role": "neutral",
+        "displayName": "Thumbed Paper",
+        "canonical": "#e2e5de",
+        "tonalRamp": [
+          "#0b0b0a",
+          "#242621",
+          "#41433d",
+          "#60625c",
+          "#81837d",
+          "#a3a6a0",
+          "#c8cac5",
+          "#eeefed"
+        ]
+      },
+      "field": {
+        "role": "neutral",
+        "displayName": "Blank Field",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Line-Printer Ink",
+        "canonical": "#16171a",
+        "tonalRamp": [
+          "#0b0b0c",
+          "#242528",
+          "#414245",
+          "#606165",
+          "#818286",
+          "#a3a5a9",
+          "#c8c9cc",
+          "#eeeeef"
+        ]
+      },
+      "ink-2": {
+        "role": "neutral",
+        "displayName": "Worn Ink",
+        "canonical": "#484c54",
+        "tonalRamp": [
+          "#0a0b0e",
+          "#22252b",
+          "#3e424a",
+          "#5d616a",
+          "#7e828b",
+          "#a0a5ae",
+          "#c6c9cf",
+          "#edeef0"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Perforation Grey",
+        "canonical": "#b5b9b2",
+        "tonalRamp": [
+          "#0a0c0a",
+          "#232621",
+          "#40433d",
+          "#5f635c",
+          "#80847d",
+          "#a3a6a0",
+          "#c7cac5",
+          "#eeefed"
+        ]
+      },
+      "signal": {
+        "role": "primary",
+        "displayName": "Signal Stencil Yellow",
+        "canonical": "#f2c230",
+        "tonalRamp": [
+          "#100a00",
+          "#302300",
+          "#523f02",
+          "#785d01",
+          "#a07d07",
+          "#ca9f06",
+          "#e4c677",
+          "#f7eed7"
+        ]
+      },
+      "stamp": {
+        "role": "secondary",
+        "displayName": "Stamp Red",
+        "canonical": "#b50d28",
+        "tonalRamp": [
+          "#1e0002",
+          "#4c010a",
+          "#7f0318",
+          "#b50e28",
+          "#de4249",
+          "#ff7272",
+          "#feb3af",
+          "#ffe9e7"
+        ]
+      },
+      "good": {
+        "role": "neutral",
+        "displayName": "Confirmed Green",
+        "canonical": "#1f7a3d",
+        "tonalRamp": [
+          "#001003",
+          "#012e10",
+          "#015021",
+          "#167438",
+          "#419758",
+          "#66bb7a",
+          "#a3d9ad",
+          "#e3f4e6"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Landing and event page titles."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Section titles on steel."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Sheet and ticket headings."
+      },
+      "row-title": {
+        "displayName": "Row Title",
+        "purpose": "Event names in chart rows."
+      },
+      "numeral": {
+        "displayName": "Numeral",
+        "purpose": "Coach codes such as M1 and C1."
+      },
+      "stamp": {
+        "displayName": "Stamp",
+        "purpose": "State stamps only."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Ledes and explanations, held to 58-66ch."
+      },
+      "body-small": {
+        "displayName": "Body Small",
+        "purpose": "Row subtitles, figure labels and notes."
+      },
+      "data": {
+        "displayName": "Data",
+        "purpose": "Chart cells, venues, times and measurements."
+      },
+      "action": {
+        "displayName": "Action",
+        "purpose": "Button labels."
+      },
+      "code": {
+        "displayName": "Code",
+        "purpose": "Booking references and the printed date."
+      }
+    },
+    "shadows": [
+      {
+        "name": "pasted-sheet",
+        "value": "0 18px 40px -18px rgb(0 0 0 / .7)",
+        "purpose": "Chart sheets on the steel ground."
+      },
+      {
+        "name": "floating-slip",
+        "value": "0 10px 28px -10px rgb(0 0 0 / .7)",
+        "purpose": "Seat and cart panels over the 3D view."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Pen tick and paper-feed reveal."
+      },
+      {
+        "name": "state-change",
+        "value": "120ms-200ms",
+        "purpose": "Color changes on rows, controls, links and coaches."
+      },
+      {
+        "name": "pen-tick",
+        "value": "300ms",
+        "purpose": "The tick drawn on the active chart row."
+      },
+      {
+        "name": "paper-feed",
+        "value": "450ms",
+        "purpose": "The seat proof feeding in when the venue changes."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "phone",
+        "value": "760px"
+      },
+      {
+        "name": "tablet",
+        "value": "1080px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Seat Action",
+      "kind": "button",
+      "refersTo": "button-seat",
+      "description": "The main action on chart paper: open a seat view.",
+      "html": "<button class=\"ds-btn-seat\">View seats</button>",
+      "css": ".ds-btn-seat { font: 600 12px/1.2 var(--f-mono); padding: 8px 12px; border: 1px solid transparent; border-radius: 0; cursor: pointer; transition: background .12s, color .12s; background: var(--ink); color: var(--signal); } .ds-btn-seat:hover { background: var(--signal); color: var(--ink); border-color: var(--ink); } .ds-btn-seat:focus-visible { outline: 2px solid var(--stamp); outline-offset: 2px; }"
+    },
+    {
+      "name": "Seat Action on Steel",
+      "kind": "button",
+      "refersTo": "button-seat-on-steel",
+      "description": "The main action when it sits directly on a steel panel.",
+      "html": "<button class=\"ds-btn-steel\">Find booking</button>",
+      "css": ".ds-btn-steel { font: 600 12px/1.2 var(--f-mono); padding: 8px 12px; border: 1px solid transparent; border-radius: 0; cursor: pointer; transition: background .12s, color .12s; padding: 10px 12px; background: var(--signal); color: var(--ink); } .ds-btn-steel:hover { background: var(--on-steel); } .ds-btn-steel:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }"
+    },
+    {
+      "name": "Quiet Button",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "A low-emphasis action on paper.",
+      "html": "<button class=\"ds-btn-quiet\">Remove from this browser</button>",
+      "css": ".ds-btn-quiet { font: 600 12px/1.2 var(--f-mono); padding: 8px 12px; border: 1px solid transparent; border-radius: 0; cursor: pointer; transition: background .12s, color .12s; background: none; color: var(--ink); border-color: var(--ink-2); } .ds-btn-quiet:hover { background: var(--paper-2); } .ds-btn-quiet:focus-visible { outline: 2px solid var(--stamp); outline-offset: 2px; }"
+    },
+    {
+      "name": "Filter Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Date and language filters above a chart.",
+      "html": "<button class=\"ds-chip\">All dates</button> <button class=\"ds-chip ds-chip-on\" aria-pressed=\"true\">Sat, 28 Nov</button>",
+      "css": ".ds-chip { padding: 5px 9px; background: none; color: var(--ink); border: 1px solid var(--ink-2); border-radius: 0; font: 400 11px/1.3 var(--f-mono); cursor: pointer; } .ds-chip:hover { background: var(--paper-2); } .ds-chip-on, .ds-chip-on:hover { background: var(--ink); color: var(--signal); border-color: var(--ink); } .ds-chip:focus-visible { outline: 2px solid var(--stamp); outline-offset: 2px; }"
+    },
+    {
+      "name": "Chart Input",
+      "kind": "input",
+      "refersTo": "input-chart",
+      "description": "A white printed field on chart paper.",
+      "html": "<input class=\"ds-input\" placeholder=\"Film, team or city\" aria-label=\"Search\" />",
+      "css": ".ds-input { width: 100%; padding: 8px; background: #fff; color: var(--ink); border: 1px solid var(--ink); border-radius: 0; font: 400 13px/1.4 var(--f-mono); } .ds-input::placeholder { color: var(--ink-2); } .ds-input:focus-visible { outline: 2px solid var(--stamp); outline-offset: 1px; }"
+    },
+    {
+      "name": "Chart Strip",
+      "kind": "nav",
+      "refersTo": "nav-strip",
+      "description": "The sticky header with stencil mark and category links.",
+      "html": "<nav class=\"ds-strip\" aria-label=\"Categories\"><span class=\"ds-strip-mark\">SV</span><span class=\"ds-strip-name\">SeatView</span><a class=\"ds-strip-link\" aria-current=\"page\" href=\"#\">Movies</a><a class=\"ds-strip-link\" href=\"#\">Cricket</a></nav>",
+      "css": ".ds-strip { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 0 16px; background: var(--steel); color: var(--on-steel); border-bottom: 3px double var(--signal); } .ds-strip-mark { font: 800 26px/1 var(--f-stencil); color: var(--signal); } .ds-strip-name { font: 800 24px/1 var(--f-display); } .ds-strip-link { padding: 8px 10px; font: 600 15px/1.5 var(--f-body); color: var(--on-steel-2); text-decoration: none; border-bottom: 2px solid transparent; transition: color .15s; } .ds-strip-link:hover { color: var(--on-steel); } .ds-strip-link[aria-current='page'] { color: var(--signal); border-bottom-color: var(--signal); } .ds-strip-link:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }"
+    },
+    {
+      "name": "Chart Sheet",
+      "kind": "card",
+      "refersTo": "sheet",
+      "description": "Pasted continuous-feed paper with punched margins and a printed row.",
+      "html": "<div class=\"ds-sheet\"><i class=\"ds-feed\"></i><div class=\"ds-sheet-body\"><b class=\"ds-row-title\">Kalki 2898 AD</b><span class=\"ds-row-data\">Sat, 28 Nov 07:00 pm</span></div><i class=\"ds-feed\"></i></div>",
+      "css": ".ds-sheet { display: grid; grid-template-columns: 22px minmax(0, 1fr) 22px; background: var(--paper); color: var(--ink); border-bottom: 2px dashed var(--ink-2); box-shadow: 0 18px 40px -18px rgb(0 0 0 / .7); } .ds-feed { background-image: radial-gradient(circle at center, var(--steel) 0 4.5px, transparent 5px); background-size: 22px 24px; background-position: center top; } .ds-sheet-body { padding: 18px; } .ds-row-title { display: block; font: 800 20px/1.08 var(--f-display); } .ds-row-data { font: 400 12px/1.4 var(--f-mono); font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "State Stamp",
+      "kind": "custom",
+      "refersTo": "stamp-state",
+      "description": "A rubber-stamped booking state.",
+      "html": "<span class=\"ds-stamp\">CNF</span>",
+      "css": ".ds-stamp { display: inline-block; padding: 3px 9px; color: var(--stamp); border: 2px solid currentColor; outline: 1px solid currentColor; outline-offset: 2px; font: 800 18px/1.1 var(--f-stencil); letter-spacing: .05em; text-transform: uppercase; transform: rotate(-5deg); }"
+    },
+    {
+      "name": "Coach Marker",
+      "kind": "custom",
+      "refersTo": "coach-marker",
+      "description": "A stencilled category code on a coach panel.",
+      "html": "<a class=\"ds-coach\" href=\"#\"><span class=\"ds-coach-code\">M1</span><span class=\"ds-coach-label\">Movies</span></a>",
+      "css": ".ds-coach { display: block; padding: 18px; background: var(--steel-3); color: var(--on-steel); border-block: 8px solid var(--signal); text-decoration: none; } .ds-coach-code { display: block; font: 800 clamp(5rem, 9vw, 8.5rem)/.9 var(--f-stencil); color: var(--signal); } .ds-coach-label { display: block; margin-top: 14px; font: 800 30px/1 var(--f-display); } .ds-coach:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Night Coach Chart",
+    "overview": "**Creative North Star: \"The Night Coach Chart\"**\n\nSeatView treats every show and match as a coach, and every seat as a printed line on that coach's reservation chart. The ground is painted night-blue steel. Listings arrive on pasted continuous-feed paper with punched sprocket margins, set in one line-printer black, while stencilled yellow numerals mark the categories the way numerals mark a carriage.\n\nThe system is dense where a buyer compares and loud where a buyer orients. Chart rows are small, tabular and exact; coach numerals and headlines are huge and condensed. The real seat render and its measurements stay beside the chart, so the proof reads as part of the same printed record.\n\nMaterial carries the hierarchy. Paper sits on steel, stamps land on paper, and corners stay square throughout. Depth comes from a sheet being pasted down, never from glass or a glowing surface.",
+    "keyCharacteristics": [
+      "Night-blue painted steel ground with off-white chart paper pasted over it.",
+      "Stencilled yellow coach numerals as category and section markers.",
+      "Tabular monospaced rows for every figure a buyer compares.",
+      "Red rubber-stamp marks for booking state.",
+      "Square corners, dashed perforations and double-ruled strip edges."
+    ],
+    "rules": [
+      {
+        "name": "The Paper Carries Ink Rule",
+        "body": "Chart data is printed in ink on paper; steel holds orientation, headlines and drawings.",
+        "section": "colors"
+      },
+      {
+        "name": "The Red Means State Rule",
+        "body": "Stamp red marks what has happened to a seat or booking, or what needs attention. It is never a brand color or decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The Stencil Is Painted Rule",
+        "body": "The stencil face is for things painted on a coach: coach codes, the brand mark, livery codes, film plates and stamps. It never sets running text.",
+        "section": "typography"
+      },
+      {
+        "name": "The Figures Line Up Rule",
+        "body": "Any number a buyer compares is set in Martian Mono with tabular numerals.",
+        "section": "typography"
+      },
+      {
+        "name": "The Stamp Case Rule",
+        "body": "Only stamps are transformed to uppercase. Team codes and booking references keep their own capitals, and all other interface text stays in sentence case.",
+        "section": "typography"
+      },
+      {
+        "name": "The Chart Stays Scannable Rule",
+        "body": "Listings stay as ruled, numbered rows on a sheet. On phones each row becomes a stacked record with its action at full width.",
+        "section": "layout"
+      },
+      {
+        "name": "The Only Paper Lifts Rule",
+        "body": "Shadows belong to paper over steel or over the 3D canvas. Steel surfaces separate by tone and rule.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Square Stock Rule",
+        "body": "Paper, plates, controls and panels are cut square. Circles appear only as punched holes and as points in technical drawings.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do print listings as numbered, ruled chart rows on paper.",
+      "Do put real seat renders and engine-computed measurements next to the choice they support.",
+      "Do use stencilled coach codes (M1, C1, F1, B1) as category markers.",
+      "Do reserve stamp red for state, selection, errors and focus on paper.",
+      "Do set compared figures in Martian Mono with tabular numerals.",
+      "Do keep booking and form controls at least 44px tall at phone width.",
+      "Do build punched sprocket holes with a hard-stop radial fill, as the chart sheet does."
+    ],
+    "donts": [
+      "Don't round corners on paper, plates, panels or controls.",
+      "Don't use soft decorative gradients or glass; the hard-stop sprocket punch is the material exception.",
+      "Don't use real logos, crests or official posters; listing art is generated livery.",
+      "Don't set text in Perforation Grey or use it as a control boundary.",
+      "Don't use stencil lettering for running text.",
+      "Don't add small uppercase labels above headings; coach codes are the section markers."
+    ]
+  }
+}

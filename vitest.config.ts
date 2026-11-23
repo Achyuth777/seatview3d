@@ -1,0 +1,14 @@
+import { defineConfig, mergeConfig } from 'vitest/config';
+import viteConfig from './vite.config';
+
+export default mergeConfig(
+  viteConfig,
+  defineConfig({
+    test: {
+      // With TEST_DATABASE_URL every DB test file shares one real database, so run files one at a time.
+      fileParallelism: !process.env.TEST_DATABASE_URL,
+      testTimeout: 30_000,
+      hookTimeout: 60_000,
+    },
+  }),
+);
