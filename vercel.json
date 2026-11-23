@@ -1,0 +1,6 @@
+{
+  "framework": "vite",
+  "buildCommand": "npx tsc --noEmit && npx vite build --mode offline",
+  "outputDirectory": "dist",
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+}

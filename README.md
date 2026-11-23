@@ -104,6 +104,10 @@ docker compose up -d --build
 
 The Docker files have not been run end to end yet. Their runtime steps were rehearsed without Docker.
 
+### Vercel
+
+[`vercel.json`](vercel.json) deploys the frontend only, using the in-browser booking mode. Bookings are saved in each visitor's browser, so visitors don't share seat availability. For shared bookings, run the Fastify server with PostgreSQL.
+
 ## Configuration
 
 | Variable | Default | Purpose |
