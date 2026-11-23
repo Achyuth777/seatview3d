@@ -20,6 +20,9 @@ function hash(s: string): number {
   return h >>> 0;
 }
 
+/** The painted panel and lettering colours for a film, stable per film id. */
+export const filmPanel = (id: string) => FILM_PANELS[hash(id) % FILM_PANELS.length]!;
+
 export function LiveryPlate({ listing, size = 'md' }: { listing: Listing; size?: 'sm' | 'md' | 'lg' }) {
   if (listing.home && listing.away) {
     const [h1, h2] = listing.home.colors;

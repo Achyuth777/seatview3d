@@ -1,11 +1,15 @@
 import { useEffect } from 'react';
 import { EVENTS } from './booking/catalog';
+import { Account } from './site/Account';
+import { Admin } from './site/Admin';
+import { AuditoriumPreview } from './site/AuditoriumPreview';
 import { BookView } from './site/BookView';
+import { CinemaPage } from './site/CinemaPage';
+import { Discover } from './site/Discover';
 import { EventPage } from './site/EventPage';
 import { Landing } from './site/Landing';
 import { Listings } from './site/Listings';
 import { NotFound } from './site/NotFound';
-import { Profile } from './site/Profile';
 import { Shell } from './site/Shell';
 import { match, navigate, useLocation } from './site/router';
 
@@ -38,14 +42,20 @@ export function App() {
     );
   }
 
+  const preview = match('/preview/:id', path);
+  if (preview) return <AuditoriumPreview key={preview.id} id={preview.id!} />;
+
   const event = match('/event/:id', path);
+  const cinema = match('/cinema/:id', path);
   const page =
     path === '/' ? <Landing /> :
-    path === '/movies' ? <Listings key="movie" kind="movie" /> :
+    path === '/movies' ? <Discover /> :
     path === '/cricket' ? <Listings key="cricket" kind="cricket" /> :
     path === '/football' ? <Listings key="football" kind="football" /> :
     path === '/basketball' ? <Listings key="basketball" kind="basketball" /> :
-    path === '/profile' ? <Profile /> :
+    path === '/profile' ? <Account /> :
+    path === '/admin' ? <Admin /> :
+    cinema ? <CinemaPage key={cinema.id} id={cinema.id!} /> :
     event ? <EventPage id={event.id!} /> :
     <NotFound />;
 

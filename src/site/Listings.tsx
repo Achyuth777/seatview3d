@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import { EVENTS, LISTINGS, listingForEvent, type ListingKind } from '../booking/catalog';
+import { EVENTS, listingForEvent, type ListingKind } from '../booking/catalog';
 import { ChartSheet } from './chart';
 import { formatDate } from './format';
 import { ChartTable } from './Landing';
-import { useProfile } from './profileStore';
+import { useCity } from './platform';
 
 const TITLES: Record<ListingKind, { title: string; code: string; lede: string }> = {
   movie: { title: 'Movies', code: 'M1', lede: 'Special screenings in a 14 m Scope hall. Every seat shows how much of the screen fills your view.' },
@@ -13,23 +13,19 @@ const TITLES: Record<ListingKind, { title: string; code: string; lede: string }>
 };
 
 export function Listings({ kind }: { kind: ListingKind }) {
-  const { city } = useProfile();
+  const { city: selected, setCity } = useCity();
+  const city = selected?.name ?? '';
   const meta = TITLES[kind];
-  const [day, setDay] = useState('');
-  const [lang, setLang] = useState('');
+  const [pickedDay, setDay] = useState('');
 
-  const all = EVENTS.filter((e) => listingForEvent(e.id)!.kind === kind).sort((a, b) => a.startsAt.localeCompare(b.startsAt));
-  const days = [...new Set(all.map((e) => e.startsAt.slice(0, 10)))];
-  const langs = kind === 'movie' ? [...new Set(LISTINGS.filter((l) => l.kind === 'movie').flatMap((l) => l.languages ?? []))] : [];
-
-  const rows = useMemo(
-    () =>
-      all.filter((e) => {
-        const l = listingForEvent(e.id)!;
-        return (!city || l.city === city) && (!day || e.startsAt.startsWith(day)) && (!lang || (l.languages ?? []).includes(lang));
-      }),
-    [all, city, day, lang],
+  // Date choices come from this city, so a choice can never lead to an empty list.
+  const all = useMemo(
+    () => EVENTS.filter((e) => { const l = listingForEvent(e.id)!; return l.kind === kind && (!city || l.city === city); }).sort((a, b) => a.startsAt.localeCompare(b.startsAt)),
+    [kind, city],
   );
+  const days = [...new Set(all.map((e) => e.startsAt.slice(0, 10)))];
+  const day = days.includes(pickedDay) ? pickedDay : '';
+  const rows = all.filter((e) => !day || e.startsAt.startsWith(day));
 
   return (
     <div className="page">
@@ -44,15 +40,13 @@ export function Listings({ kind }: { kind: ListingKind }) {
           {days.map((d) => (
             <Chip key={d} on={day === d} onClick={() => setDay(d)}>{formatDate(d)}</Chip>
           ))}
-          {langs.length > 0 && <span className="filters__sep" aria-hidden="true" />}
-          {langs.length > 0 && <Chip on={!lang} onClick={() => setLang('')}>All languages</Chip>}
-          {langs.map((l) => (
-            <Chip key={l} on={lang === l} onClick={() => setLang(l)}>{l}</Chip>
-          ))}
         </div>
         <ChartTable rows={rows.map((e) => ({ eventId: e.id }))} />
         {rows.length === 0 && (
-          <p className="empty">No {meta.title.toLowerCase()} {city ? `in ${city}` : ''} for these filters. Clear a filter or choose “All cities” at the top.</p>
+          <p className="empty">
+            No {meta.title.toLowerCase()} {city ? `in ${city}` : ''} right now.{' '}
+            {city && <button type="button" className="btn btn--seat" onClick={() => setCity('')}>Show all cities</button>}
+          </p>
         )}
       </ChartSheet>
     </div>

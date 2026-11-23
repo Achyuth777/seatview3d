@@ -65,7 +65,7 @@ describe('versioned migrations', () => {
   it('applies all migrations once on a fresh database, then nothing', async () => {
     const db = await freshDb();
     const versions = loadMigrations().map((m) => m.version);
-    expect(versions).toEqual([1, 2, 3]);
+    expect(versions).toEqual([1, 2, 3, 4]);
     expect(await migrate(db)).toEqual(versions);
     expect(await migrate(db)).toEqual([]);
     const { rows } = await db.query<{ version: number }>('SELECT version FROM schema_migrations ORDER BY version');
@@ -81,7 +81,7 @@ describe('versioned migrations', () => {
       "INSERT INTO bookings (reference, event_id, total_minor, currency, created_at) VALUES ('SV-OLD001', $1, 1200, 'EUR', now())",
       [EVENT],
     );
-    expect(await migrate(db)).toEqual([1, 2, 3]);
+    expect(await migrate(db)).toEqual([1, 2, 3, 4]);
     const { rows } = await db.query<{ reference: string; hold_id: string | null }>(
       "SELECT reference, hold_id FROM bookings WHERE reference = 'SV-OLD001'",
     );
@@ -94,7 +94,7 @@ describe('versioned migrations', () => {
     const bad = [...loadMigrations(), { version: 99, name: 'broken', sql: 'CREATE TABLE t3 (id int); SELECT nope_column FROM t3' }];
     await expect(migrate(db, bad)).rejects.toThrow();
     const { rows } = await db.query<{ version: number }>('SELECT version FROM schema_migrations ORDER BY version');
-    expect(rows.map((r) => r.version)).toEqual([1, 2, 3]);
+    expect(rows.map((r) => r.version)).toEqual([1, 2, 3, 4]);
     const t3 = await db.query("SELECT to_regclass('public.t3') AS t");
     expect(t3.rows[0]).toEqual({ t: null });
     await db?.close();

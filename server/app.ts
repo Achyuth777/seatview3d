@@ -7,6 +7,7 @@ import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyContextConfig, type FastifyInstance } from 'fastify';
 import { EVENTS } from '../src/booking/catalog';
 import { BookingError, type BookingService } from '../src/booking/types';
+import { registerPlatform, type PlatformDeps } from './platform/routes';
 
 const STATUS: Record<BookingError['code'], number> = {
   SEAT_UNAVAILABLE: 409,
@@ -33,6 +34,8 @@ export interface AppOptions {
   ready?: () => Promise<void>;
   /** Serve the built frontend from this directory. */
   staticDir?: string;
+  /** Discovery, accounts and admin routes. */
+  platform?: PlatformDeps;
 }
 
 /** REST API mirroring the BookingService interface, plus optional static frontend hosting. */
@@ -55,11 +58,13 @@ export function buildApp(service: BookingService, opts: AppOptions = {}): Fastif
 
   void app.register(helmet, {
     // Default CSP (self + inline styles); 'self' covers the API and the built app on one origin.
+    // Film posters from a licensed feed are the only remote images.
+    contentSecurityPolicy: { directives: { imgSrc: ["'self'", 'data:', 'https:'] } },
     crossOriginEmbedderPolicy: false,
   });
   void app.register(compress, { threshold: 1024 });
   if (opts.allowedOrigins?.length) {
-    void app.register(cors, { origin: opts.allowedOrigins, methods: ['GET', 'POST', 'DELETE'] });
+    void app.register(cors, { origin: opts.allowedOrigins, methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], credentials: true });
   }
   if (opts.rateLimit) {
     void app.register(rateLimit, {
@@ -87,6 +92,7 @@ export function buildApp(service: BookingService, opts: AppOptions = {}): Fastif
   });
 
   app.register(async (api) => {
+    if (opts.platform) registerPlatform(api, opts.platform, limit, opts.rateLimit?.holdsMax, opts.allowedOrigins);
     api.get('/api/events', { config: limit() }, async () => EVENTS);
 
     api.get<{ Params: { eventId: string }; Querystring: { holdId?: string } }>(

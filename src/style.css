@@ -64,7 +64,7 @@ main { flex: 1; }
 .sheet__title { margin: 22px 0 8px; font: 800 28px/1.05 var(--f-display); }
 .sheet__title:first-of-type { margin-top: 4px; }
 .sheet__text { max-width: 60ch; }
-.sheet a:not(.btn):not(.chart__title) { color: var(--ink); }
+.sheet a:not(.btn):not(.chart__title):not(.dx-btn):not(.dx-show__go) { color: var(--ink); }
 
 /* Hero */
 .hero { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr); gap: clamp(20px, 3vw, 44px); align-items: start; padding: clamp(16px, 2.5vw, 32px) var(--gutter) clamp(40px, 5vw, 72px); }

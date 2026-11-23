@@ -21,6 +21,9 @@ export interface Config {
   staticDir: string;
   sweepIntervalMs: number;
   logLevel: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent';
+  /** Live showtimes. Only set when all credentials and MOVIEGLU_LICENSED=true are present. */
+  movieGlu?: { client: string; apiKey: string; authorization: string; territory: string };
+  feedRefreshMinutes: number;
 }
 
 export class ConfigError extends Error {}
@@ -73,7 +76,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, argv: string[] 
   const logLevel = (env.LOG_LEVEL ?? 'info') as Config['logLevel'];
   if (!logLevels.includes(logLevel)) problems.push(`LOG_LEVEL must be one of ${logLevels.join(', ')}`);
 
+  // MovieGlu's evaluation licence forbids publishing its data, so a key alone never enables the feed.
+  const mg = { client: env.MOVIEGLU_CLIENT, apiKey: env.MOVIEGLU_API_KEY, authorization: env.MOVIEGLU_AUTHORIZATION };
+  const mgSet = Object.values(mg).filter(Boolean).length;
+  const mgLicensed = bool('MOVIEGLU_LICENSED', false);
+  if (mgLicensed && mgSet < 3) problems.push('MOVIEGLU_LICENSED=true also needs MOVIEGLU_CLIENT, MOVIEGLU_API_KEY and MOVIEGLU_AUTHORIZATION');
+
   const config: Config = {
+    movieGlu: mgLicensed && mgSet === 3 ? { client: mg.client!, apiKey: mg.apiKey!, authorization: mg.authorization!, territory: 'IN' } : undefined,
+    feedRefreshMinutes: int('FEED_REFRESH_MINUTES', 60, 15, 1440),
     port: int('PORT', 3001, 1, 65535),
     host: env.HOST || '127.0.0.1',
     databaseUrl,

@@ -15,6 +15,8 @@ import { CartPanel } from '../ui/CartPanel';
 import { Readout } from '../ui/Readout';
 import { SeatActions } from '../ui/SeatActions';
 import { StadiumReadout } from '../ui/StadiumReadout';
+import { DEMO_AUDITORIUMS } from '../discovery/directory';
+import { Provenance } from './AuditoriumPreview';
 import { rememberBooking, updateProfile, useProfile } from './profileStore';
 import { Link } from './router';
 import { formatWhen } from './format';
@@ -55,10 +57,11 @@ export function BookView({ eventId, initialSeat, animate, clean }: Props) {
     window.history.replaceState(null, '', url);
   }, [selectedId]);
 
+  const demoAuditorium = event.venue === 'cinema' ? DEMO_AUDITORIUMS.find((a) => a.id === `demo-hall-${listing.city.toLowerCase()}-1`) : undefined;
   const view = { selectedId, setSelectedId, event, cats, booking, animate, clean };
 
   return (
-    <div className={clean ? 'book book--clean' : booking.stage === 'select' ? 'book' : 'book book--checkout'}>
+    <div className={`${clean ? 'book book--clean' : booking.stage === 'select' ? 'book' : 'book book--checkout'}${demoAuditorium && !clean ? ' book--has-prov' : ''}`}>
       {event.venue === 'cinema' ? (
         <CinemaView {...view} />
       ) : (
@@ -72,8 +75,9 @@ export function BookView({ eventId, initialSeat, animate, clean }: Props) {
               {listing.title}
             </Link>
             <span className="book-strip__when">{formatWhen(event.startsAt)} · {listing.venueName}</span>
-            <Link to="/profile" className="book-strip__profile">Your tickets</Link>
+            <Link to="/profile" className="book-strip__profile">Profile</Link>
           </header>
+          {demoAuditorium && <Provenance auditorium={demoAuditorium} />}
           <CartPanel
             event={event}
             cats={cats}

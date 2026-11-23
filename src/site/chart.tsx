@@ -33,7 +33,7 @@ export function PreviewPanel({ venue, caption, compact, feed }: { venue: VenueKi
       </div>
       <figcaption className="preview__caption">
         <span className="preview__seat">{caption ?? p.label}</span>
-        <span className="preview__note">Rendered from the venue model</span>
+        <span className="preview__note">Illustrative demo model, not a real venue</span>
         <dl className="figures">
           {figs.map((f) => (
             <div key={f.label} className="figures__row">

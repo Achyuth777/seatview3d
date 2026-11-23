@@ -4,6 +4,10 @@ import { ConfigError, loadConfig } from './config';
 import { openPglite, openPostgres } from './db';
 import { migrate } from './migrate';
 import { PgBookingService } from './pgBookingService';
+import { CITIES } from '../src/discovery/directory';
+import { Accounts } from './platform/accounts';
+import { CatalogStore } from './platform/catalogStore';
+import { movieGluProvider } from './platform/feeds';
 
 /** Starts the booking API (and, with --static / SERVE_STATIC=true, the built frontend). See server/config.ts. */
 let config;
@@ -23,7 +27,13 @@ const applied = await migrate(db);
 const service = new PgBookingService(db, { seatIdsFor, priceFor, holdMs: config.holdMinutes * 60_000 });
 const seedReport = await service.seedMockSales();
 
+const feed = config.movieGlu ? movieGluProvider(config.movieGlu) : null;
+const catalog = new CatalogStore(db, feed);
+await catalog.syncDirectory();
+const accounts = new Accounts(db, catalog, service);
+
 const app = buildApp(service, {
+  platform: { catalog, accounts, feedProviderId: feed?.id ?? null },
   logger: { level: config.logLevel },
   rateLimit: { max: config.rateLimitMax, holdsMax: config.rateLimitHoldsMax },
   allowedOrigins: config.allowedOrigins,
@@ -59,12 +69,28 @@ const sweeper = setInterval(async () => {
 }, config.sweepIntervalMs);
 sweeper.unref();
 
+// Showtime refresh runs only when a licensed provider is configured.
+const feedTimer = feed
+  ? setInterval(async () => {
+      for (const c of CITIES) {
+        try {
+          const r = await catalog.refresh(c.id);
+          if (r.status === 'failed') app.log.warn({ city: c.id, message: r.message }, 'showtime refresh failed; keeping cached results');
+        } catch (err) {
+          app.log.error(err, 'showtime refresh crashed');
+        }
+      }
+    }, config.feedRefreshMinutes * 60_000)
+  : null;
+feedTimer?.unref();
+
 let closing = false;
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {
   process.on(sig, async () => {
     if (closing) return;
     closing = true;
     clearInterval(sweeper);
+    if (feedTimer) clearInterval(feedTimer);
     app.log.info(`${sig}: shutting down`);
     await app.close(); // stops accepting, finishes in-flight requests
     await db.close();

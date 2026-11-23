@@ -114,9 +114,9 @@ describe.skipIf(!usingPostgres)('real PostgreSQL: migrations', () => {
     await reset.close();
     const [a, b, c] = await Promise.all([extraConnection(), extraConnection(), extraConnection()]);
     const results = await Promise.all([migrate(a!), migrate(b!), migrate(c!)]);
-    expect(results.flat().sort((x, y) => x - y)).toEqual([1, 2, 3]); // applied once in total, by whichever got the lock
+    expect(results.flat().sort((x, y) => x - y)).toEqual([1, 2, 3, 4]); // applied once in total, by whichever got the lock
     const { rows } = await a!.query<{ version: number }>('SELECT version FROM schema_migrations ORDER BY version');
-    expect(rows.map((r) => r.version)).toEqual([1, 2, 3]);
+    expect(rows.map((r) => r.version)).toEqual([1, 2, 3, 4]);
     await Promise.all([a!.close(), b!.close(), c!.close()]);
   });
 });

@@ -5,12 +5,14 @@ import type { Booking } from '../booking/types';
 import { bookingService } from '../booking/venueData';
 import { ChartSheet, Stamp } from './chart';
 import { formatWhen } from './format';
+import { retryConnection, useAccount, useConnectionEpoch } from './platform';
 import { forgetBooking, rememberBooking, updateProfile, useProfile } from './profileStore';
 import { Link } from './router';
 
 type Loaded = { state: 'loading' } | { state: 'ok'; booking: Booking } | { state: 'missing' } | { state: 'error' };
 
-export function Profile() {
+/** Demo tickets and checkout details kept in this browser. */
+export function Profile({ embedded = false }: { embedded?: boolean }) {
   const profile = useProfile();
   const [name, setName] = useState(profile.name);
   const [email, setEmail] = useState(profile.email);
@@ -18,10 +20,14 @@ export function Profile() {
   const [formError, setFormError] = useState<string | null>(null);
   const [tickets, setTickets] = useState<Record<string, Loaded>>({});
 
+  const { status } = useAccount();
+  const epoch = useConnectionEpoch();
+
   useEffect(() => {
     let live = true;
     for (const b of profile.bookings) {
-      if (tickets[b.reference]) continue;
+      // A failed fetch is retried when the connection is re-checked.
+      if (tickets[b.reference] && tickets[b.reference]!.state !== 'error') continue;
       setTickets((t) => ({ ...t, [b.reference]: { state: 'loading' } }));
       bookingService
         .findBooking(b.reference, b.email)
@@ -32,7 +38,7 @@ export function Profile() {
       live = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile.bookings]);
+  }, [profile.bookings, epoch]);
 
   const saveDetails = (e: FormEvent) => {
     e.preventDefault();
@@ -50,34 +56,34 @@ export function Profile() {
   };
 
   return (
-    <div className="page profile">
-      <header className="page__head">
-        <span className="page__coach" aria-hidden="true">PNR</span>
-        <h1 className="page__title">Your tickets</h1>
-        <p className="page__lede">
-          Your details and tickets are kept in this browser only. There is no account and no password.
-        </p>
-      </header>
-
+    <div className={embedded ? 'profile' : 'page profile'}>
       <div className="profile__grid">
         <section aria-labelledby="tickets-title" className="profile__tickets">
           <h2 id="tickets-title" className="section-title section-title--small">
-            {profile.bookings.length ? `${profile.bookings.length} ${profile.bookings.length === 1 ? 'ticket' : 'tickets'}` : 'No tickets yet'}
+            {profile.bookings.length ? `${profile.bookings.length} ${profile.bookings.length === 1 ? 'demo ticket' : 'demo tickets'} in this browser` : 'No demo tickets yet'}
           </h2>
           {profile.bookings.length === 0 && (
             <p className="empty empty--steel">
-              Book a seat and its ticket appears here. <Link to="/">Find a show or a match</Link>, or add a booking you made
-              elsewhere with its reference.
+              Book a sample seat and its demo ticket appears here. <Link to="/">Find a show or a match</Link>, or add a demo
+              booking with its reference.
             </p>
           )}
           {profile.bookings.map((b) => (
-            <Ticket key={b.reference} reference={b.reference} loaded={tickets[b.reference]} />
+            <Ticket key={b.reference} reference={b.reference} eventId={b.eventId} loaded={tickets[b.reference]} deviceOnly={status === 'frontend-only'} />
           ))}
-          <FindBooking defaultEmail={profile.email} />
+          {status === 'unavailable' ? (
+            <div className="find" data-lookup="needs-server">
+              <h3 className="find__title">Add a booking by reference</h3>
+              <p>Looking up a booking needs the SeatView server, which isn’t responding. Tickets already saved on this device stay listed above.</p>
+              <button type="button" className="btn btn--seat" onClick={retryConnection}>Try again</button>
+            </div>
+          ) : (
+            <FindBooking defaultEmail={profile.email} deviceOnly={status === 'frontend-only'} checking={status === 'loading'} />
+          )}
         </section>
 
         <ChartSheet className="profile__details">
-          <h2 className="sheet__title">Your details</h2>
+          <h2 className="sheet__title">Checkout details (this browser)</h2>
           <form onSubmit={saveDetails} noValidate className="form">
             <label>
               Name
@@ -97,17 +103,28 @@ export function Profile() {
   );
 }
 
-function Ticket({ reference, loaded }: { reference: string; loaded?: Loaded }) {
+function Ticket({ reference, eventId, loaded, deviceOnly }: { reference: string; eventId: string; loaded?: Loaded; deviceOnly: boolean }) {
   if (!loaded || loaded.state === 'loading') {
     return <article className="ticket ticket--loading" aria-busy="true"><span className="ticket__ref">{reference}</span> Fetching ticket…</article>;
   }
-  if (loaded.state !== 'ok') {
+  if (loaded.state === 'error') {
+    // An outage must not look like a lost ticket, so keep what this device knows and offer no removal.
+    const event = EVENTS.find((x) => x.id === eventId);
+    const listing = listingForEvent(eventId);
+    return (
+      <article className="ticket ticket--problem" data-ticket="saved-offline">
+        <span className="ticket__ref">{reference}</span>
+        <h3 className="ticket__title">{listing?.title ?? eventId}</h3>
+        <p className="ticket__meta">{event ? formatWhen(event.startsAt) : ''}{listing ? ` · ${listing.venueName}` : ''}</p>
+        <p>Saved on this device. Seats and total will appear when the server is back.</p>
+      </article>
+    );
+  }
+  if (loaded.state === 'missing') {
     return (
       <article className="ticket ticket--problem">
         <span className="ticket__ref">{reference}</span>
-        <p>
-          {loaded.state === 'missing' ? 'This booking was not found with the saved email.' : 'Could not reach the booking server. Try again later.'}
-        </p>
+        <p>{deviceOnly ? 'This ticket’s details aren’t stored in this browser.' : 'This booking was not found with the saved email.'}</p>
         <button type="button" className="btn btn--quiet" onClick={() => forgetBooking(reference)}>Remove from this browser</button>
       </article>
     );
@@ -134,7 +151,7 @@ function Ticket({ reference, loaded }: { reference: string; loaded?: Loaded }) {
   );
 }
 
-function FindBooking({ defaultEmail }: { defaultEmail: string }) {
+function FindBooking({ defaultEmail, deviceOnly, checking }: { defaultEmail: string; deviceOnly: boolean; checking: boolean }) {
   const [ref, setRef] = useState('');
   const [email, setEmail] = useState(defaultEmail);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -146,7 +163,7 @@ function FindBooking({ defaultEmail }: { defaultEmail: string }) {
     setMsg(null);
     try {
       const found = await bookingService.findBooking(ref, email);
-      if (!found) setMsg({ ok: false, text: 'No booking matches that reference and email. Check both and try again.' });
+      if (!found) setMsg({ ok: false, text: deviceOnly ? 'No ticket with that reference and email is stored in this browser.' : 'No booking matches that reference and email. Check both and try again.' });
       else {
         rememberBooking({ reference: found.reference, email: email.trim().toLowerCase(), eventId: found.eventId });
         setMsg({ ok: true, text: `Added ${found.reference}.` });
@@ -161,8 +178,13 @@ function FindBooking({ defaultEmail }: { defaultEmail: string }) {
 
   return (
     <form className="find" onSubmit={submit}>
-      <h3 className="find__title">Add a booking by reference</h3>
-      <div className="find__fields">
+      <h3 className="find__title">{deviceOnly ? 'Find a ticket on this device' : 'Add a booking by reference'}</h3>
+      {deviceOnly && (
+        <p id="find-scope" className="find__scope">
+          This version has no server, so this finds only demo tickets booked in this browser. Tickets from another device or browser can’t be found here.
+        </p>
+      )}
+      <div className="find__fields" aria-describedby={deviceOnly ? 'find-scope' : undefined} role="group">
         <label>
           Reference
           <input value={ref} onChange={(e) => setRef(e.target.value.toUpperCase())} placeholder="SV-XXXXXX" maxLength={9} required />
@@ -171,7 +193,7 @@ function FindBooking({ defaultEmail }: { defaultEmail: string }) {
           Email used at checkout
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         </label>
-        <button type="submit" className="btn btn--seat" disabled={busy}>{busy ? 'Looking…' : 'Find booking'}</button>
+        <button type="submit" className="btn btn--seat" disabled={busy || checking}>{busy ? 'Looking…' : deviceOnly ? 'Find on this device' : 'Find booking'}</button>
       </div>
       {msg && <p className={msg.ok ? 'form__ok' : 'form__error'} role="status">{msg.text}</p>}
     </form>

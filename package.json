@@ -10,7 +10,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "start": "npm run build && tsx server/index.ts --static"
+    "start": "npm run build && tsx server/index.ts --static",
+    "admin:grant": "tsx server/grantAdmin.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "0.5.17",

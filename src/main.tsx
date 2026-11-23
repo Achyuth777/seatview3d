@@ -9,6 +9,7 @@ import '@fontsource/archivo/400';
 import '@fontsource/archivo/600';
 import { App } from './App';
 import './style.css';
+import './site/discover.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

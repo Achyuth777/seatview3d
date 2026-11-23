@@ -106,7 +106,25 @@ The Docker files have not been run end to end yet. Their runtime steps were rehe
 
 ### Vercel
 
-[`vercel.json`](vercel.json) deploys the frontend only, using the in-browser booking mode. Bookings are saved in each visitor's browser, so visitors don't share seat availability. For shared bookings, run the Fastify server with PostgreSQL.
+[`vercel.json`](vercel.json) deploys the frontend only, using the in-browser booking mode. Cinema discovery and demo booking work there. Accounts, saved shows, shared seat availability and admin tools need the Fastify server with PostgreSQL.
+
+## Cinema discovery
+
+Cities, cinemas, auditoriums, films and screenings are separate records with stable IDs. The directory covers 15 real cinemas in Chennai, Hyderabad, Mumbai, Bengaluru and Kochi, with per-city aliases such as "Forum Mall".
+
+- **Showtimes:** no live feed is enabled. Each cinema links to its provider page with "Check showtimes". The sample schedule is labelled as a demo.
+- **3D previews:** a model belongs to a specific auditorium and is labelled "Verified layout" or "Illustrative demo". No real auditorium is mapped yet.
+- **Live feed:** a [MovieGlu](https://developer.movieglu.com/) adapter is included but has not been run against a real response. Its evaluation licence forbids publishing data, so it stays off until `MOVIEGLU_LICENSED=true` is set with commercial credentials. Provider cinema IDs are then added in the admin workspace.
+
+### First admin
+
+Create an account in the app, then run this on the server with the same database settings:
+
+```bash
+npm run admin:grant -- you@example.com
+```
+
+Add `--revoke` to remove access. The admin workspace is at `/admin`.
 
 ## Configuration
 
@@ -123,6 +141,9 @@ The Docker files have not been run end to end yet. Their runtime steps were rehe
 | `SERVE_STATIC` | `false` | Serve `dist/` (`npm start` enables it) |
 | `SWEEP_INTERVAL_SECONDS` | `60` | Cleanup interval for expired holds |
 | `LOG_LEVEL` | `info` | Server log level |
+| `MOVIEGLU_CLIENT`, `MOVIEGLU_API_KEY`, `MOVIEGLU_AUTHORIZATION` | none | Showtime provider credentials, server-side only |
+| `MOVIEGLU_LICENSED` | `false` | Set to `true` only with a licence that allows publishing |
+| `FEED_REFRESH_MINUTES` | `60` | Showtime refresh interval (15–1440) |
 
 ## API
 
@@ -152,7 +173,7 @@ docs/        Phase reports and screenshots
 
 ## Project status
 
-This is a working demo, not a live ticketing service. It has no payments, user accounts or email delivery. It has been tested in Chrome and Chrome's phone emulation, but not yet on physical phones or in Safari. From close stadium seats, the far ends of the pitch can fall outside the frame.
+This is a working demo, not a live ticketing service. It has no payments, email delivery, password reset or email verification. It has been tested in Chrome and Chrome's phone emulation, but not yet on physical phones or in Safari. From close stadium seats, the far ends of the pitch can fall outside the frame.
 
 The design system is in [DESIGN.md](DESIGN.md), the product brief is in [PRODUCT.md](PRODUCT.md), and build notes are in [docs](docs).
 
