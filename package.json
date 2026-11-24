@@ -11,7 +11,10 @@
     "preview": "vite preview",
     "test": "vitest run",
     "start": "npm run build && tsx server/index.ts --static",
-    "admin:grant": "tsx server/grantAdmin.ts"
+    "admin:grant": "tsx server/grantAdmin.ts",
+    "typecheck": "tsc --noEmit",
+    "migrate:check": "tsx server/migrateCheck.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@electric-sql/pglite": "0.5.17",

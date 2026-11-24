@@ -77,7 +77,7 @@ const feedTimer = feed
       for (const c of CITIES) {
         try {
           const r = await catalog.refresh(c.id);
-          if (r.status === 'failed') app.log.warn({ city: c.id, message: r.message }, 'showtime refresh failed; keeping cached results');
+          if (r.status === 'failed') app.log.warn({ event: 'feed_sync_failed', city: c.id, reason: r.message, action: 'Cached times stay visible. Check the provider status and credentials, then use Retry in /admin#feeds.' }, 'showtime sync failed');
         } catch (err) {
           app.log.error(err, 'showtime refresh crashed');
         }

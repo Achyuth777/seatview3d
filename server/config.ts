@@ -136,6 +136,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, argv: string[] 
     logLevel,
   };
 
+  if (production) {
+    // Production refuses settings that only make sense on a developer's machine.
+    if (!databaseUrl) problems.push('DATABASE_URL is required in production (embedded PGlite is for development only)');
+    if (!env.APP_ORIGIN) problems.push('APP_ORIGIN is required in production, for links in emails');
+    if (env.ADMIN_MFA_REQUIRED && !config.adminMfaRequired) problems.push('ADMIN_MFA_REQUIRED cannot be turned off in production');
+  }
   if (problems.length) throw new ConfigError(`Invalid configuration:\n  - ${problems.join('\n  - ')}`);
   return config;
 }
