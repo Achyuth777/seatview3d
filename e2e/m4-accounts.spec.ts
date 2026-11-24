@@ -66,7 +66,7 @@ test('profile, home city and languages persist in PostgreSQL across sessions; a 
   await expect(page.locator('.dx-ok')).toHaveText('Saved.');
   await expect(page.getByLabel('Email me reminders')).toBeDisabled();
   await page.goto('/movies?city=chennai');
-  await page.getByRole('button', { name: /Add PVR Palazzo to favourites/ }).click();
+  await page.getByRole('button', { name: /Add PVR Palazzo.* to favourites/ }).click();
   await page.getByRole('button', { name: /Save show:/ }).first().click();
 
   const other = await browser.newContext({ ...info.project.use });
@@ -76,7 +76,7 @@ test('profile, home city and languages persist in PostgreSQL across sessions; a 
   await expect(second.getByLabel('Home city')).toHaveValue('chennai');
   await expect(second.getByLabel('Tamil')).toBeChecked();
   await expect(second.locator('.dx-savedrow')).toHaveCount(1);
-  await expect(second.getByRole('link', { name: 'PVR Palazzo' })).toBeVisible();
+  await expect(second.getByRole('link', { name: /^PVR Palazzo/ })).toBeVisible();
   await second.goto('/movies?city=mumbai');
   await expect(second.getByText('Browsing Mumbai')).toBeVisible();
   expect((await (await second.request.get('/api/me')).json()).user.homeCity).toBe('chennai');

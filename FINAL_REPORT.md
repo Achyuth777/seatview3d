@@ -1,6 +1,6 @@
 # SeatView: final report (release candidate)
 
-Date: 2026-11-24 · Branch: `feat/seatview-rc`, cut from `feat/cinema-discovery`. It is committed locally only: not pushed, not merged, and not deployed. Production (`seatview3d.vercel.app`) is unchanged.
+Date: 2026-11-24 · Branch: `feat/seatview-rc`, cut from `feat/cinema-discovery`, pushed as its own branch. It has not been merged into `main` or deployed, and production (`seatview3d.vercel.app`) is unchanged.
 
 **Read this first.**
 - **No live showtimes:** no city has them, because no permitted provider exists yet.
@@ -77,20 +77,20 @@ E2E_BASE_URL=http://127.0.0.1:3100 E2E_DATABASE_URL=postgres://…/seatview_test
 |---|---|---|
 | Type check | local | Passed |
 | Vitest | PGlite | 128 passed, 5 skipped |
-| Vitest | PostgreSQL 18 (`seatview_test`) | 132 passed (before the final CSP test; see M6) |
+| Vitest | PostgreSQL 18 (`seatview_test`) | 133 passed |
 | Migration check | PGlite and PostgreSQL | 1–6 applied, rerun applied nothing |
 | Production build | local | Passed: two entry points (site and admin) |
 | Playwright acceptance A, B, C | Chromium 1440, Chromium 390, WebKit 390 | 10 passed, 2 skipped (keyboard run is desktop Chromium only) |
 | Keyboard-only journey A | Chromium 1440 | Passed |
 | Reduced motion (A plus seat view) | Chromium 1440 and 390, WebKit 390 | Passed |
 | Seat preview, camera, discovery | WebKit 390 | 14 passed, 1 skipped (CPU throttling is Chromium-only) |
-| Final regression (M2, M3, M4) | Chromium 1440 and 390 | FINAL_REGRESSION_1 |
+| Final regression (M2, M3, M4) | Chromium 1440 and 390 | 38 passed, 2 skipped, 2 failed. The 2 failures were a test locator broken by acceptance renaming PVR Palazzo in the shared test database; after fixing the locator, the M4 file passed 8 of 8. |
 | Admin (M5) | Chromium 1440 and 390, two-step sign-in on | 8 passed (last run in M5) |
 | CI smoke | Built app on PostgreSQL, Chromium | 12 passed, 3 skipped |
 | Log privacy | Real server, 638 lines | 0 emails, cookies or client addresses |
 | Backup restore drill | `seatview` → `seatview_test` | 20 tables, 95,796 rows, no mismatches |
 
-The GitHub Actions workflow has not run on GitHub, because the branch isn't pushed. Its steps ran locally as above.
+The GitHub Actions workflow runs on pull requests and on pushes to `main`. Pushing a branch alone doesn't trigger it, so it hasn't run on GitHub yet. Its steps ran locally as above.
 
 ### Performance (same device profile, server and database)
 
@@ -138,7 +138,7 @@ All 15 venue-specific links were re-checked on 2026-11-24 against District's pub
 5. **Docker:** never built or run here, because Docker isn't installed.
 6. **Real devices:** physical iPhone and Android checks are still needed, especially the bottom search dock with the on-screen keyboard.
 7. **Admin hardening:** TOTP recovery codes, and encrypting the stored TOTP secret.
-8. **Release approval:** the branch needs review, a push, CI on GitHub, and your "authorize release".
+8. **Release approval:** the branch needs review, a pull request (CI runs on pull requests), and your "authorize release".
 
 ## Architecture in plain English
 
