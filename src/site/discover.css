@@ -203,3 +203,64 @@
 @media (max-width: 760px) {
   .hero__sheet .chart__row:nth-child(n + 5) { display: none; }
 }
+
+/* M2: two destinations first. */
+.lp-start { padding: clamp(16px, 2.5vw, 32px) var(--gutter) clamp(32px, 4vw, 56px); }
+.lp-start__title { margin: 0; font: 800 clamp(2.4rem, 5vw, 4.6rem)/.94 var(--f-display); letter-spacing: -.005em; text-wrap: balance; }
+.lp-start__lede { max-width: 58ch; margin: 8px 0 18px; color: var(--on-steel-2); }
+.lp-start__grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr); gap: clamp(20px, 3vw, 44px); align-items: start; }
+.lp-find__title { margin: 0 0 10px; font: 800 28px/1.05 var(--f-display); }
+.lp-find .lp-cities { margin-bottom: 8px; }
+.lp-find .search { margin-bottom: 4px; }
+.lp-find .search input { font-size: 14px; }
+.lp-find__more { margin: 10px 0 0; font-size: 14px; }
+.lp-resume { display: block; margin: 6px 0; padding: 8px 10px; color: var(--ink); background: var(--paper-2); font-size: 14px; }
+.lp-elsewhere { margin: 10px 0 0; font-size: 14px; }
+.lp-explore { position: relative; display: grid; padding-top: clamp(70px, 7vw, 110px); color: var(--on-steel); text-decoration: none; }
+.lp-explore__code { position: absolute; top: 0; right: -4px; font: 800 clamp(7rem, 12vw, 12rem)/.8 var(--f-stencil); color: var(--signal); }
+.lp-explore__frame { position: relative; z-index: 1; display: block; aspect-ratio: 16 / 10; overflow: hidden; background: var(--steel-2); border: 1px solid var(--steel-line); }
+.lp-explore__frame img { width: 100%; height: 100%; object-fit: cover; transition: transform .3s var(--ease); }
+.lp-explore:hover img { transform: scale(1.03); }
+.lp-explore__text { position: relative; z-index: 1; display: grid; gap: 4px; padding: 12px 14px 14px; color: var(--ink); background: var(--paper); }
+.lp-explore__title { font: 800 28px/1.05 var(--f-display); }
+.lp-explore__note { color: var(--ink-2); font-size: 14px; }
+.lp-explore__go { justify-self: start; margin-top: 6px; padding: 10px 12px; color: var(--signal); background: var(--ink); font: 600 12px/1.2 var(--f-mono); }
+.lp-explore:hover .lp-explore__go { color: var(--ink); background: var(--signal); }
+.lp-explore:focus-visible { outline: 2px solid var(--signal); outline-offset: 4px; }
+.lp-demo { border-top: 1px solid var(--steel-line); }
+.lp-demo__sub { font: 400 14px/1.3 var(--f-body); color: var(--ink-2); }
+.dx-cinema__head h3 a:focus-visible, .dx-btn:focus-visible { outline: 2px solid var(--stamp); outline-offset: 2px; }
+.dx-search { display: flex; gap: 6px; }
+.dx-search__city select { min-height: 44px; padding: 0 8px; color: var(--ink); background: #fff; border: 1px solid var(--ink); border-radius: 0; font: 600 13px/1 var(--f-mono); }
+.dx-search input { flex: 1; min-width: 0; }
+
+@media (max-width: 1080px) {
+  .lp-start__grid { grid-template-columns: minmax(0, 1fr); }
+  .lp-explore { padding-top: 0; grid-template-columns: 42% minmax(0, 1fr); }
+  .lp-explore__code { display: none; }
+  .lp-explore__frame { aspect-ratio: auto; height: 100%; min-height: 150px; }
+  .lp-explore__title { font-size: 22px; }
+}
+@media (max-width: 760px) {
+  .lp-start { padding-top: 12px; }
+  .lp-start__lede { margin-bottom: 12px; font-size: 15px; }
+  /* Movies on a phone: city and search dock at the bottom, inside the thumb zone. */
+  .site--movies .strip__city { display: none; }
+  .dx--movies { padding-bottom: 96px; }
+  .dx--movies .dx-search { position: fixed; z-index: 15; inset: auto 0 0; top: auto; padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); background: var(--steel); border-top: 3px double var(--signal); }
+  .lp-explore { grid-template-columns: minmax(0, 1fr); }
+  .lp-explore__frame { min-height: 0; aspect-ratio: 16 / 9; }
+}
+@media (min-width: 761px) {
+  .dx-search__city { display: none; }
+}
+
+/* M4: account states that must not be confused with each other. */
+.dx--narrow { max-width: 640px; }
+.dx-updates .dx-list { padding: 4px 14px; }
+.dx-alert { padding: 10px 0; border-bottom: 1px dashed var(--rule); font-size: 14px; line-height: 1.45; }
+.dx-alert s { color: var(--ink-2); }
+.dx-alert strong { color: var(--stamp); }
+.dx-alert a { margin-left: 4px; }
+.dx-savedrow h3::before { content: 'Saved show'; display: inline-block; margin-right: 8px; padding: 1px 6px; vertical-align: 3px; color: var(--ink); background: var(--paper-2); border: 1px solid var(--ink-2); font: 600 10px/1.5 var(--f-mono); }
+#ax-conf + .dx-note { padding: 10px 12px; border: 2px dashed var(--on-steel-2); }

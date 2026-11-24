@@ -5,9 +5,11 @@ import { CITIES, type Screening } from '../../src/discovery/directory';
 import { istNow } from '../../src/discovery/query';
 import type { Db } from '../db';
 import { httpError, toScreening, type CatalogStore } from './catalogStore';
+import { newTotpSecret, otpauthUri, verifyTotp } from './totp';
+import type { Mailer } from './mailer';
 
 const scrypt = promisify(scryptCb) as (p: string, s: Buffer, len: number) => Promise<Buffer>;
-export const SESSION_DAYS = 30;
+export const DEFAULT_SESSION_HOURS = 24 * 30;
 
 export interface PublicUser {
   id: string;
@@ -17,6 +19,7 @@ export interface PublicUser {
   homeCity: string | null;
   languages: string[];
   notify: { showChanges: boolean; emailReminders: boolean };
+  emailVerified: boolean;
 }
 
 type Row = Record<string, unknown>;
@@ -28,6 +31,7 @@ const toUser = (r: Row): PublicUser => ({
   homeCity: r.home_city as string | null,
   languages: r.languages as string[],
   notify: r.notify as PublicUser['notify'],
+  emailVerified: !!r.email_verified_at,
 });
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -58,8 +62,83 @@ function showTime(local: string): string {
   return `${Number(d)} ${MONTHS[Number(mo) - 1]}, ${hour % 12 || 12}:${m} ${hour < 12 ? 'am' : 'pm'}`;
 }
 
+export interface AccountOptions {
+  mailer?: Mailer;
+  /** Origin used in emailed links, e.g. https://seatview.example. */
+  appOrigin?: string;
+  sessionHours?: number;
+}
+
 export class Accounts {
-  constructor(private db: Db, private catalog: CatalogStore, private bookings: BookingService, private now: () => Date = () => new Date()) {}
+  readonly sessionHours: number;
+  private readonly mailer: Mailer | null;
+  private readonly origin: string;
+  constructor(private db: Db, private catalog: CatalogStore, private bookings: BookingService, private now: () => Date = () => new Date(), opts: AccountOptions = {}) {
+    this.sessionHours = opts.sessionHours ?? DEFAULT_SESSION_HOURS;
+    this.mailer = opts.mailer ?? null;
+    this.origin = (opts.appOrigin ?? 'http://127.0.0.1:3001').replace(/\/$/, '');
+  }
+
+  get emailDelivery() { return this.mailer?.mode ?? 'none'; }
+
+  private async issueToken(userId: string, purpose: 'verify' | 'reset', hours: number) {
+    const token = randomBytes(32).toString('base64url');
+    await this.db.query('INSERT INTO auth_tokens (token_hash, user_id, purpose, expires_at) VALUES ($1,$2,$3,$4)',
+      [tokenHash(token), userId, purpose, new Date(this.now().getTime() + hours * 3_600_000).toISOString()]);
+    return token;
+  }
+
+  /** Marks a single-use token used and returns its user, or null if it is unknown, used or expired. */
+  private async useToken(token: string, purpose: 'verify' | 'reset'): Promise<string | null> {
+    const { rows } = await this.db.query<{ user_id: string }>(
+      `UPDATE auth_tokens SET used_at = $3 WHERE token_hash = $1 AND purpose = $2 AND used_at IS NULL AND expires_at > $3 RETURNING user_id`,
+      [tokenHash(token), purpose, this.now().toISOString()]);
+    return rows[0]?.user_id ?? null;
+  }
+
+  async sendVerification(user: PublicUser) {
+    if (user.emailVerified || !this.mailer) return;
+    const token = await this.issueToken(user.id, 'verify', 24);
+    await this.mailer.send({ to: user.email, kind: 'verify', subject: 'Confirm your SeatView email', body: `Confirm your email: ${this.origin}/verify-email?token=${token}
+This link expires in 24 hours.` });
+  }
+
+  async verifyEmail(token: string) {
+    const userId = await this.useToken(token, 'verify');
+    if (!userId) throw httpError(400, 'BAD_TOKEN', 'This link is invalid or has expired. Request a new one from Profile.');
+    const { rows } = await this.db.query<Row>('UPDATE users SET email_verified_at = COALESCE(email_verified_at, $2) WHERE id = $1 RETURNING *', [userId, this.now().toISOString()]);
+    return toUser(rows[0]!);
+  }
+
+  /** Always succeeds from the caller's view, so it never reveals whether an account exists. */
+  async requestPasswordReset(emailRaw: string) {
+    const { rows } = await this.db.query<Row>('SELECT * FROM users WHERE email = $1', [emailRaw.trim().toLowerCase()]);
+    if (!rows[0] || !this.mailer) return;
+    const token = await this.issueToken(rows[0].id as string, 'reset', 1);
+    await this.mailer.send({ to: rows[0].email as string, kind: 'reset', subject: 'Reset your SeatView password', body: `Choose a new password: ${this.origin}/reset-password?token=${token}
+This link expires in 1 hour. If you didn't ask for this, ignore this email.` });
+  }
+
+  /** Sets a new password, signs the account out everywhere, and confirms the email (the link proved it). */
+  async resetPassword(token: string, password: string) {
+    if (password.length < 10) throw httpError(400, 'WEAK_PASSWORD', 'Use at least 10 characters.');
+    const userId = await this.useToken(token, 'reset');
+    if (!userId) throw httpError(400, 'BAD_TOKEN', 'This reset link is invalid or has expired. Request a new one.');
+    await this.db.transaction(async (tx) => {
+      await tx.query('UPDATE users SET password_hash = $2, email_verified_at = COALESCE(email_verified_at, $3) WHERE id = $1', [userId, await hashPassword(password), this.now().toISOString()]);
+      await tx.query('DELETE FROM user_sessions WHERE user_id = $1', [userId]);
+    });
+  }
+
+  /** Alerts not yet shown, marked delivered in the same statement so each is delivered exactly once. */
+  async deliverAlerts(userId: string) {
+    const { rows } = await this.db.query<Row>(
+      `UPDATE alerts a SET delivered_at = $2 FROM saved_screenings v
+       WHERE a.user_id = $1 AND a.delivered_at IS NULL AND v.user_id = a.user_id AND v.screening_id = a.screening_id
+       RETURNING a.id, a.screening_id, a.cinema_id, a.kind, a.old_start, a.new_start, v.snapshot->>'filmTitle' AS film, v.snapshot->>'cinemaName' AS cinema`,
+      [userId, this.now().toISOString()]);
+    return rows.map((r) => ({ id: String(r.id), screeningId: r.screening_id as string, cinemaId: r.cinema_id as string, kind: r.kind as 'changed' | 'removed', oldStart: r.old_start as string, newStart: (r.new_start as string | null) ?? null, filmTitle: r.film as string, cinemaName: r.cinema as string }));
+  }
 
   async register(input: { email: string; name: string; password: string }) {
     const email = input.email.trim().toLowerCase();
@@ -73,7 +152,9 @@ export class Accounts {
       [randomUUID(), email, name, hash],
     );
     if (!rows[0]) throw httpError(409, 'EMAIL_TAKEN', 'An account with this email already exists. Sign in instead.');
-    return this.startSession(toUser(rows[0]));
+    const user = toUser(rows[0]);
+    await this.sendVerification(user);
+    return this.startSession(user);
   }
 
   async login(emailRaw: string, password: string) {
@@ -85,7 +166,7 @@ export class Accounts {
 
   private async startSession(user: PublicUser) {
     const token = randomBytes(32).toString('base64url');
-    const expires = new Date(this.now().getTime() + SESSION_DAYS * 86_400_000);
+    const expires = new Date(this.now().getTime() + this.sessionHours * 3_600_000);
     await this.db.query('INSERT INTO user_sessions (token_hash, user_id, expires_at) VALUES ($1,$2,$3)', [tokenHash(token), user.id, expires.toISOString()]);
     return { user, token };
   }
@@ -93,17 +174,45 @@ export class Accounts {
   logout = (token: string) => this.db.query('DELETE FROM user_sessions WHERE token_hash = $1', [tokenHash(token)]);
 
   async userForToken(token: string | undefined): Promise<PublicUser | null> {
+    return (await this.sessionForToken(token))?.user ?? null;
+  }
+
+  /** The signed-in user plus this session's second-factor state. Role and MFA are re-read on every request. */
+  async sessionForToken(token: string | undefined): Promise<{ user: PublicUser; mfaVerified: boolean; mfaEnrolled: boolean } | null> {
     if (!token) return null;
     const { rows } = await this.db.query<Row>(
-      'SELECT u.* FROM user_sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1 AND s.expires_at > $2',
+      'SELECT u.*, s.mfa_verified_at FROM user_sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1 AND s.expires_at > $2',
       [tokenHash(token), this.now().toISOString()],
     );
-    return rows[0] ? toUser(rows[0]) : null;
+    const r = rows[0];
+    return r ? { user: toUser(r), mfaVerified: !!r.mfa_verified_at, mfaEnrolled: !!r.totp_enabled_at } : null;
+  }
+
+  /** Starts (or restarts) TOTP enrolment. The secret is shown once, to its owner, for their authenticator app. */
+  async enrollTotp(user: PublicUser) {
+    const { rows } = await this.db.query<Row>('SELECT totp_enabled_at FROM users WHERE id = $1', [user.id]);
+    if (rows[0]?.totp_enabled_at) throw httpError(409, 'MFA_ENROLLED', 'Two-step sign-in is already set up for this account.');
+    const secret = newTotpSecret();
+    await this.db.query('UPDATE users SET totp_secret = $2 WHERE id = $1', [user.id, secret]);
+    return { secret, uri: otpauthUri(secret, user.email) };
+  }
+
+  /** Checks a code; on success the first use enables TOTP and this session counts as second-factor verified. */
+  async verifyTotpForSession(user: PublicUser, sessionToken: string, code: string) {
+    const { rows } = await this.db.query<Row>('SELECT totp_secret FROM users WHERE id = $1', [user.id]);
+    const secret = rows[0]?.totp_secret as string | null;
+    if (!secret) throw httpError(409, 'MFA_NOT_STARTED', 'Set up two-step sign-in first.');
+    if (!verifyTotp(secret, code.trim(), this.now().getTime())) throw httpError(401, 'BAD_CODE', 'That code didn’t match. Check your authenticator app and try again.');
+    const at = this.now().toISOString();
+    await this.db.query('UPDATE users SET totp_enabled_at = COALESCE(totp_enabled_at, $2) WHERE id = $1', [user.id, at]);
+    await this.db.query('UPDATE user_sessions SET mfa_verified_at = $2 WHERE token_hash = $1', [tokenHash(sessionToken), at]);
   }
 
   async updateProfile(userId: string, p: { name?: string; homeCity?: string | null; languages?: string[]; notify?: Partial<PublicUser['notify']> }) {
     if (p.name !== undefined && !p.name.trim()) throw httpError(400, 'INVALID_NAME', 'Enter your name.');
     if (p.homeCity && !CITIES.some((c) => c.id === p.homeCity)) throw httpError(400, 'UNKNOWN_CITY', 'Unknown city.');
+    // External reminders only exist once real email delivery works, and only when the user opts in.
+    if (p.notify?.emailReminders && this.emailDelivery !== 'smtp') throw httpError(409, 'REMINDERS_UNAVAILABLE', 'Email reminders aren’t available yet.');
     const { rows } = await this.db.query<Row>('SELECT * FROM users WHERE id = $1', [userId]);
     const u = toUser(rows[0]!);
     const next = {

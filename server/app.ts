@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import compress from '@fastify/compress';
 import cors from '@fastify/cors';
@@ -24,7 +25,8 @@ const EVENT_ID = '^[a-z0-9-]{1,64}$';
 const SEAT_ID = '^[A-Za-z0-9-]{1,32}$';
 
 export interface AppOptions {
-  logger?: boolean | { level: string };
+  /** Structured JSON logs. `stream` lets tests capture output. */
+  logger?: boolean | { level: string; stream?: { write(line: string): void } };
   /** Per-IP requests per minute for API routes / for POST /api/holds. Omit to disable (tests). */
   rateLimit?: { max: number; holdsMax: number };
   /** Exact origins allowed cross-origin; empty/omitted = same-origin only. */
@@ -36,11 +38,24 @@ export interface AppOptions {
   staticDir?: string;
   /** Discovery, accounts and admin routes. */
   platform?: PlatformDeps;
+  /** The public origin is https (production): browsers are told to upgrade any http subresource. */
+  httpsOrigin?: boolean;
 }
 
 /** REST API mirroring the BookingService interface, plus optional static frontend hosting. */
 export function buildApp(service: BookingService, opts: AppOptions = {}): FastifyInstance {
-  const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 16 * 1024, trustProxy: opts.trustProxy ?? false });
+  const app = Fastify({
+    logger: opts.logger ? { ...(typeof opts.logger === 'object' ? opts.logger : {}), base: { service: 'seatview' }, serializers: SAFE_SERIALIZERS } : false,
+    // Every request gets an ID (a caller's x-request-id is reused when well-formed) that is logged and returned.
+    genReqId: (req) => {
+      const given = req.headers['x-request-id'];
+      return typeof given === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(given) ? given : randomUUID();
+    },
+    requestIdLogLabel: 'requestId',
+    bodyLimit: 16 * 1024,
+    trustProxy: opts.trustProxy ?? false,
+  });
+  app.addHook('onSend', async (req, reply) => { reply.header('x-request-id', req.id); });
 
   app.setErrorHandler((err, req, reply) => {
     if (err instanceof BookingError) {
@@ -52,14 +67,18 @@ export function buildApp(service: BookingService, opts: AppOptions = {}): Fastif
       // Framework/plugin client errors: 413 body too large, 415 media type, 429 rate limited, …
       return reply.status(e.statusCode).send({ code: e.code ?? 'BAD_REQUEST', message: e.message });
     }
-    req.log.error(err);
+    req.log.error({ err: { type: err instanceof Error ? err.name : 'Error', message: err instanceof Error ? err.message : String(err) }, event: 'request_failed' }, 'request failed');
     return reply.status(500).send({ code: 'SERVER_ERROR', message: 'Internal error' });
   });
 
   void app.register(helmet, {
     // Default CSP (self + inline styles); 'self' covers the API and the built app on one origin.
     // Film posters from a licensed feed are the only remote images.
-    contentSecurityPolicy: { directives: { imgSrc: ["'self'", 'data:', 'https:'] } },
+    contentSecurityPolicy: {
+      // upgrade-insecure-requests only when the site itself is served over https: Safari applies it even to
+      // http://127.0.0.1, rewriting every script URL to https and leaving a blank page.
+      directives: { imgSrc: ["'self'", 'data:', 'https:'], upgradeInsecureRequests: opts.httpsOrigin ? [] : null },
+    },
     crossOriginEmbedderPolicy: false,
   });
   void app.register(compress, { threshold: 1024 });
@@ -221,10 +240,19 @@ export function buildApp(service: BookingService, opts: AppOptions = {}): Fastif
   app.setNotFoundHandler((req, reply) => {
     // Client-side routes (/movies, /event/…, /profile) load the app shell when serving the build.
     if (opts.staticDir && req.method === 'GET' && !req.url.startsWith('/api') && (req.headers.accept ?? '').includes('text/html')) {
-      return reply.header('cache-control', 'no-cache').sendFile('index.html');
+      return reply.header('cache-control', 'no-cache').sendFile(req.url.startsWith('/admin') ? 'admin.html' : 'index.html');
     }
     return reply.status(404).send({ code: 'NOT_FOUND', message: `Route ${req.method} ${req.url.split('?')[0]} not found` });
   });
 
   return app;
 }
+
+/**
+ * Request logs carry method, path (never the query string, which can hold an email), status and request ID.
+ * No headers, cookies, bodies or client addresses are logged.
+ */
+const SAFE_SERIALIZERS = {
+  req: (r: { method: string; url: string }) => ({ method: r.method, path: r.url.split('?')[0] }),
+  res: (r: { statusCode: number }) => ({ statusCode: r.statusCode }),
+};

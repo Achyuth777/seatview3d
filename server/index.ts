@@ -7,7 +7,8 @@ import { PgBookingService } from './pgBookingService';
 import { CITIES } from '../src/discovery/directory';
 import { Accounts } from './platform/accounts';
 import { CatalogStore } from './platform/catalogStore';
-import { movieGluProvider } from './platform/feeds';
+import { fixtureProvider, movieGluProvider } from './platform/feeds';
+import { OutboxMailer } from './platform/mailer';
 
 /** Starts the booking API (and, with --static / SERVE_STATIC=true, the built frontend). See server/config.ts. */
 let config;
@@ -27,14 +28,16 @@ const applied = await migrate(db);
 const service = new PgBookingService(db, { seatIdsFor, priceFor, holdMs: config.holdMinutes * 60_000 });
 const seedReport = await service.seedMockSales();
 
-const feed = config.movieGlu ? movieGluProvider(config.movieGlu) : null;
-const catalog = new CatalogStore(db, feed);
+const feed = config.feedProvider === 'movieglu' ? movieGluProvider(config.movieGlu!)
+  : config.feedProvider === 'fixture' ? fixtureProvider(config.feedFixtureFile!) : null;
+const catalog = new CatalogStore(db, feed, undefined, { cacheHours: config.feedCacheHours });
 await catalog.syncDirectory();
-const accounts = new Accounts(db, catalog, service);
+const accounts = new Accounts(db, catalog, service, undefined, { mailer: new OutboxMailer(db), appOrigin: config.appOrigin, sessionHours: config.sessionHours });
 
 const app = buildApp(service, {
-  platform: { catalog, accounts, feedProviderId: feed?.id ?? null },
+  platform: { catalog, accounts, feedProviderId: feed?.id ?? null, devOutbox: config.devOutbox, catalogDb: db, adminMfaRequired: config.adminMfaRequired },
   logger: { level: config.logLevel },
+  httpsOrigin: config.appOrigin.startsWith('https://'),
   rateLimit: { max: config.rateLimitMax, holdsMax: config.rateLimitHoldsMax },
   allowedOrigins: config.allowedOrigins,
   trustProxy: config.trustProxy,
@@ -75,7 +78,7 @@ const feedTimer = feed
       for (const c of CITIES) {
         try {
           const r = await catalog.refresh(c.id);
-          if (r.status === 'failed') app.log.warn({ city: c.id, message: r.message }, 'showtime refresh failed; keeping cached results');
+          if (r.status === 'failed') app.log.warn({ event: 'feed_sync_failed', city: c.id, reason: r.message, action: 'Cached times stay visible. Check the provider status and credentials, then use Retry in /admin#feeds.' }, 'showtime sync failed');
         } catch (err) {
           app.log.error(err, 'showtime refresh crashed');
         }

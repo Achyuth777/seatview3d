@@ -3,6 +3,7 @@ import type { Cinema, DiscoveryPayload } from '../discovery/directory';
 import { applyFilters, coerceFilters, facets, groupByCinema, istDate, otherCityMatch, searchCinemas, searchFilms } from '../discovery/query';
 import { ChartSheet, PreviewPanel } from './chart';
 import { fmtDay, useAccount, useCity, useDiscovery, useLibrary, type ConnectionProblem } from './platform';
+import { clearLastSearch, readLastSearch, writeLastSearch, type LastSearch } from './lastSearch';
 import { Link, navigate, useLocation } from './router';
 import { External, FavouriteButton, FeedNote, FilmRow } from './showParts';
 
@@ -25,9 +26,11 @@ export function Discover() {
 
 function CityView({ cityId, cityName, isTemporary, homeName, onHome, onSwitch }: { cityId: string; cityName: string; isTemporary: boolean; homeName?: string; onHome: () => void; onSwitch: (id: string) => void }) {
   const { query, path } = useLocation();
+  const { cities } = useCity();
   const load = useDiscovery(useMemo(() => ({ id: cityId, name: cityName }), [cityId, cityName]));
   const q = query.get('q') ?? '';
   const [text, setText] = useState(q);
+  const [restored, setRestored] = useState<LastSearch | null>(null);
   useEffect(() => setText(q), [q]);
 
   const setParam = (patch: Record<string, string>, replace = false) => {
@@ -37,8 +40,24 @@ function CityView({ cityId, cityName, isTemporary, homeName, onHome, onSwitch }:
     navigate(`${path}?${next}`, { replace, keepScroll: true });
   };
 
+  // Coming back to Movies for this city without a search picks up the last one on this device.
+  useEffect(() => {
+    if (q) return;
+    const last = readLastSearch();
+    if (last?.cityId === cityId) { setRestored(last); setParam({ q: last.q }, true); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cityId]);
+  useEffect(() => { if (q) writeLastSearch({ cityId, q }); }, [cityId, q]);
+  // ...and puts focus back on the cinema they last opened.
+  const ready = load.state === 'ok';
+  useEffect(() => {
+    if (!ready || !restored?.cinemaId) return;
+    const el = document.querySelector<HTMLElement>(`[data-restore-key="cinema:${CSS.escape(restored.cinemaId)}"]`);
+    if (el) { el.scrollIntoView({ block: 'center' }); el.focus({ preventScroll: true }); }
+  }, [ready, restored]);
+
   return (
-    <div className="dx">
+    <div className="dx dx--movies">
       {isTemporary && (
         <p className="dx-away" role="status">
           Browsing {cityName}. Your home city is still {homeName}.{' '}
@@ -50,9 +69,21 @@ function CityView({ cityId, cityName, isTemporary, homeName, onHome, onSwitch }:
         <h1>Movies in {cityName}</h1>
       </header>
       <form className="dx-search" role="search" onSubmit={(e) => { e.preventDefault(); setParam({ q: text.trim() }); }}>
+        <label className="dx-search__city">
+          <span className="visually-hidden">City</span>
+          <select value={cityId} onChange={(e) => onSwitch(e.target.value)}>
+            {cities.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </label>
         <label htmlFor="dx-q" className="visually-hidden">Search films, cinemas, malls or neighbourhoods in {cityName}</label>
-        <input id="dx-q" type="search" value={text} placeholder="Film, cinema, mall or area" onChange={(e) => { setText(e.target.value); setParam({ q: e.target.value }, true); }} autoComplete="off" />
+        <input id="dx-q" type="search" value={text} placeholder="Film, cinema, mall or area" enterKeyHint="search" onChange={(e) => { setText(e.target.value); setRestored(null); if (!e.target.value) clearLastSearch(); setParam({ q: e.target.value }, true); }} autoComplete="off" />
       </form>
+      {restored && q === restored.q && (
+        <p className="dx-feed" role="status">
+          Showing your last search.{' '}
+          <button type="button" className="dx-link" onClick={() => { clearLastSearch(); setRestored(null); setParam({ q: '' }, true); }}>Clear</button>
+        </p>
+      )}
       {load.state === 'loading' && <p className="dx-feed" role="status">Loading {cityName}…</p>}
       {load.state === 'ok' && <Results data={load.data} problem={load.problem} q={q} setParam={setParam} onSwitch={onSwitch} />}
     </div>
@@ -154,7 +185,7 @@ function Results({ data, problem, q, setParam, onSwitch }: { data: DiscoveryPayl
                 {direct.map((c) => (
                   <li key={c.id} className="dx-cinema dx-cinema--row">
                     <CinemaHead cinema={c} hit={cinemaHits.find((h) => h.cinema.id === c.id)?.matched} />
-                    {c.providerUrl && <External href={c.providerUrl}>Check showtimes</External>}
+                    {c.providerUrl && <External href={c.providerUrl} restoreKey={`provider:${c.id}`} onOpen={() => rememberCinema(c)}>Check showtimes</External>}
                   </li>
                 ))}
               </ul>
@@ -196,12 +227,14 @@ function Results({ data, problem, q, setParam, onSwitch }: { data: DiscoveryPayl
   );
 }
 
+const rememberCinema = (c: Cinema) => { const last = readLastSearch(); if (last?.cityId === c.cityId) writeLastSearch({ cityId: c.cityId, cinemaId: c.id }); };
+
 export function CinemaHead({ cinema, hit, cityName }: { cinema: Cinema; hit?: string; cityName?: string }) {
   const showHit = hit && hit !== cinema.name && hit !== cinema.mall && hit !== cinema.neighbourhood;
   return (
     <div className="dx-cinema__head">
       <div>
-        <h3><Link to={`/cinema/${cinema.id}`}>{cinema.name}</Link></h3>
+        <h3><Link to={`/cinema/${cinema.id}`} data-restore-key={`cinema:${cinema.id}`} onClick={() => rememberCinema(cinema)}>{cinema.name}</Link></h3>
         <p>{cinema.neighbourhood}{cinema.mall ? ` · ${cinema.mall}` : ''}{cityName ? ` · ${cityName}` : ''}{showHit ? ` · matches “${hit}”` : ''}</p>
       </div>
       <FavouriteButton cinema={cinema} />

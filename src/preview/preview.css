@@ -1,0 +1,85 @@
+/* Seat preview: the hall in the dark, a chart-paper sheet beside it. Night Coach Chart tokens throughout. */
+.pv { position: fixed; inset: 0; display: grid; grid-template: 48px minmax(0, 1fr) / minmax(0, 1fr) min(420px, 38vw); background: #0b1a30; color: var(--on-steel); }
+.pv-bar { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 0 14px; background: var(--steel); border-bottom: 3px double var(--signal); }
+.pv-bar__back { display: inline-flex; align-items: center; gap: 6px; min-width: 0; min-height: 44px; font: 800 20px/1 var(--f-display); text-decoration: none; }
+.pv-bar__back span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv-bar__back svg { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--signal); stroke-width: 2; }
+.pv-bar__aud { margin-left: auto; font: 400 12px/1 var(--f-mono); color: var(--on-steel-2); white-space: nowrap; }
+
+.pv-stage { position: relative; min-height: 0; overflow: hidden; }
+.pv-stage > canvas, .pv-stage > div:first-child { position: absolute !important; inset: 0; }
+.pv-stage__loading { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; font: 400 13px/1 var(--f-mono); color: var(--on-steel-2); }
+.pv-prov { position: absolute; z-index: 2; top: 12px; left: 12px; max-width: min(460px, calc(100% - 24px)); margin: 0; padding: 6px 9px; color: var(--ink); background: var(--paper); font-size: 12.5px; line-height: 1.35; box-shadow: 0 10px 28px -10px rgb(0 0 0 / .7); }
+.pv-stage__label { position: absolute; z-index: 2; left: 12px; bottom: 12px; display: flex; align-items: center; gap: 8px; margin: 0; padding: 7px 11px; color: var(--ink); background: var(--signal); font: 800 22px/1 var(--f-display); animation: pv-label .18s var(--ease); }
+.pv-stage__label b { display: grid; place-items: center; width: 22px; height: 22px; color: var(--signal); background: var(--ink); font: 600 12px/1 var(--f-mono); }
+.pv-stage__label--still { animation: pv-fade .2s linear; }
+@keyframes pv-label { from { opacity: .3; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes pv-fade { from { opacity: .5; } to { opacity: 1; } }
+
+.pv-fallback { display: grid; align-content: center; gap: 10px; padding: 64px 16px 60px; }
+.pv-fallback__note { margin: 0; max-width: 60ch; font-size: 14px; color: var(--on-steel-2); }
+.pv-section { width: 100%; height: auto; max-height: 100%; }
+
+.pv-sheet { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto; padding: 14px 16px 16px; color: var(--ink); background: var(--paper); }
+.pv-sheet__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.pv-sheet__title { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.pv-sheet__title h1 { margin: 0; font: 800 30px/1 var(--f-display); }
+.pv-grade { padding: 2px 7px; font: 600 11px/1.5 var(--f-mono); color: #fff; background: var(--good); }
+.pv-grade[data-grade='acceptable'] { color: var(--ink); background: var(--signal); }
+.pv-grade[data-grade='poor'], .pv-grade[data-grade='unacceptable'] { background: var(--stamp); }
+.pv-toggle { flex: none; min-height: 40px; padding: 6px 10px; color: var(--ink); background: none; border: 1px solid var(--ink); font: 600 12px/1.2 var(--f-mono); cursor: pointer; }
+.pv-toggle[aria-pressed='true'] { color: var(--signal); background: var(--ink); }
+.pv-toggle:disabled { opacity: .5; cursor: default; }
+.pv-hint { margin: 0; font-size: 14px; color: var(--ink-2); }
+
+.pv-figs { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; margin: 0; }
+.pv-figs > div { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 6px 0; border-top: 1px dashed var(--rule); }
+.pv-figs dt { font-size: 13px; color: var(--ink-2); }
+.pv-figs dd { margin: 0; font: 600 14px/1.2 var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.pv-compare { display: grid; gap: 8px; }
+.pv-compare__slots { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.pv-compare__slots button { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px 10px; color: var(--ink); background: none; border: 1px solid var(--ink); font: 600 13px/1.2 var(--f-mono); cursor: pointer; text-align: left; }
+.pv-compare__slots button b { display: grid; place-items: center; width: 22px; height: 22px; color: var(--paper); background: var(--ink-2); }
+.pv-compare__slots button[aria-pressed='true'] { color: var(--signal); background: var(--ink); }
+.pv-compare__slots button[aria-pressed='true'] b { color: var(--ink); background: var(--signal); }
+.pv-compare__table { width: 100%; border-collapse: collapse; font: 400 13px/1.3 var(--f-mono); font-variant-numeric: tabular-nums; }
+.pv-compare__table th, .pv-compare__table td { padding: 5px 4px; border-bottom: 1px dashed var(--rule); text-align: right; }
+.pv-compare__table thead th { font-weight: 600; border-bottom: 2px solid var(--ink); }
+.pv-compare__table tbody th { font: 400 13px/1.3 var(--f-body); color: var(--ink-2); text-align: left; }
+
+.pv-map { width: 100%; height: auto; flex: none; }
+.pv-map__screen { stroke: var(--ink); stroke-width: .2; }
+.pv-map__screen-label, .pv-map__row { fill: var(--ink-2); font: 400 .42px var(--f-mono); }
+.pv-map__seat { fill: var(--rule); cursor: pointer; transition: fill .12s; }
+.pv-map__seat:hover { fill: var(--ink-2); }
+.pv-map__seat[data-state='view'] { fill: var(--stamp); }
+.pv-map__seat[data-state='other'] { fill: var(--ink); }
+.pv-map__seat:focus { outline: none; }
+.pv-map__seat:focus-visible { stroke: var(--stamp); stroke-width: .14; paint-order: stroke; }
+.pv-legend { display: flex; gap: 14px; font-size: 12px; color: var(--ink-2); }
+.pv-legend i { display: inline-block; width: 10px; height: 10px; margin-right: 4px; vertical-align: -1px; background: var(--stamp); }
+.pv-legend i[data-k='other'] { background: var(--ink); }
+.pv-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: auto; }
+
+@media (max-width: 760px) {
+  /* Phone: the view stays on top, a compact sheet below keeps the whole seat map (and the chosen seat) visible. */
+  .pv { grid-template: 48px minmax(0, 42fr) minmax(0, 58fr) / minmax(0, 1fr); }
+  .pv-sheet { gap: 8px; padding: 10px 12px calc(12px + env(safe-area-inset-bottom)); box-shadow: 0 -10px 28px -14px rgb(0 0 0 / .8); }
+  .pv-sheet__title h1 { font-size: 24px; }
+  .pv-figs > div { padding: 4px 0; }
+  .pv-figs dt { font-size: 12px; }
+  .pv-figs dd { font-size: 13px; }
+  .pv-stage__label { font-size: 18px; bottom: 8px; left: 8px; }
+  .pv-prov { top: 8px; left: 8px; right: 8px; max-width: none; font-size: 12px; }
+  .pv-bar__aud { display: none; }
+  /* The map comes straight after the seat title so the chosen seats never scroll out of view. */
+  .pv-sheet > .pv-map { order: 1; }
+  .pv-sheet > .pv-legend { order: 2; }
+  .pv-sheet > .pv-figs, .pv-sheet > .pv-compare, .pv-sheet > .pv-hint { order: 3; }
+  .pv-sheet > .pv-actions { order: 4; margin-top: 4px; }
+  .pv-compare__table { font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pv-stage__label { animation: pv-fade .2s linear; }
+}

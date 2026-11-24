@@ -24,6 +24,20 @@ export interface Config {
   /** Live showtimes. Only set when all credentials and MOVIEGLU_LICENSED=true are present. */
   movieGlu?: { client: string; apiKey: string; authorization: string; territory: string };
   feedRefreshMinutes: number;
+  nodeEnv: string;
+  /** Origin used in emailed links. */
+  appOrigin: string;
+  sessionHours: number;
+  /** Only "outbox" (simulated, nothing is sent) exists until an email provider is connected. */
+  mailer: 'outbox';
+  /** Development only: GET /api/dev/outbox for test addresses. */
+  devOutbox: boolean;
+  /** "fixture" is a SIMULATED provider for development and tests. */
+  feedProvider: 'none' | 'movieglu' | 'fixture';
+  feedFixtureFile?: string;
+  feedCacheHours: number;
+  /** Admins must pass a TOTP check (default on in production). */
+  adminMfaRequired: boolean;
 }
 
 export class ConfigError extends Error {}
@@ -82,7 +96,29 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, argv: string[] 
   const mgLicensed = bool('MOVIEGLU_LICENSED', false);
   if (mgLicensed && mgSet < 3) problems.push('MOVIEGLU_LICENSED=true also needs MOVIEGLU_CLIENT, MOVIEGLU_API_KEY and MOVIEGLU_AUTHORIZATION');
 
+  const nodeEnv = env.NODE_ENV || 'development';
+  const production = nodeEnv === 'production';
+  const mailer = env.MAILER || 'outbox';
+  if (mailer !== 'outbox') problems.push(`MAILER=${mailer} is not available: no email provider is connected yet, so only MAILER=outbox (simulated) works`);
+  const devOutbox = bool('DEV_OUTBOX', false);
+  if (devOutbox && production) problems.push('DEV_OUTBOX must not be enabled in production');
+  const feedProvider = (env.FEED_PROVIDER || (mgLicensed ? 'movieglu' : 'none')) as Config['feedProvider'];
+  if (!['none', 'movieglu', 'fixture'].includes(feedProvider)) problems.push('FEED_PROVIDER must be none, movieglu or fixture');
+  if (feedProvider === 'fixture' && (production || !env.FEED_FIXTURE_FILE)) problems.push('FEED_PROVIDER=fixture is a simulated feed: it needs FEED_FIXTURE_FILE and is refused in production');
+  if (feedProvider === 'movieglu' && !(mgLicensed && mgSet === 3)) problems.push('FEED_PROVIDER=movieglu needs MOVIEGLU_LICENSED=true and all three MovieGlu credentials');
+  if (env.APP_ORIGIN && !/^https?:\/\/[^/]+$/.test(env.APP_ORIGIN)) problems.push('APP_ORIGIN must be an origin like https://seatview.example');
+  if (production && env.APP_ORIGIN && !env.APP_ORIGIN.startsWith('https://')) problems.push('APP_ORIGIN must use https in production');
+
   const config: Config = {
+    nodeEnv,
+    appOrigin: env.APP_ORIGIN || `http://${env.HOST || '127.0.0.1'}:${env.PORT || 3001}`,
+    sessionHours: int('SESSION_HOURS', 24 * 30, 1, 24 * 90),
+    mailer: 'outbox',
+    devOutbox,
+    feedProvider,
+    feedFixtureFile: env.FEED_FIXTURE_FILE || undefined,
+    feedCacheHours: int('FEED_CACHE_HOURS', 6, 1, 72),
+    adminMfaRequired: bool('ADMIN_MFA_REQUIRED', production),
     movieGlu: mgLicensed && mgSet === 3 ? { client: mg.client!, apiKey: mg.apiKey!, authorization: mg.authorization!, territory: 'IN' } : undefined,
     feedRefreshMinutes: int('FEED_REFRESH_MINUTES', 60, 15, 1440),
     port: int('PORT', 3001, 1, 65535),
@@ -100,6 +136,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, argv: string[] 
     logLevel,
   };
 
+  if (production) {
+    // Production refuses settings that only make sense on a developer's machine.
+    if (!databaseUrl) problems.push('DATABASE_URL is required in production (embedded PGlite is for development only)');
+    if (!env.APP_ORIGIN) problems.push('APP_ORIGIN is required in production, for links in emails');
+    if (env.ADMIN_MFA_REQUIRED && !config.adminMfaRequired) problems.push('ADMIN_MFA_REQUIRED cannot be turned off in production');
+  }
   if (problems.length) throw new ConfigError(`Invalid configuration:\n  - ${problems.join('\n  - ')}`);
   return config;
 }

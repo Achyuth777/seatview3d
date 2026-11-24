@@ -1,0 +1,27 @@
+{
+  "label": "before",
+  "profile": "Chromium 390x844, 4x CPU slowdown, 150 ms RTT, 1.6 Mbps down",
+  "at": "2026-11-24T08:17:17.039Z",
+  "lcp_landing_ms": {
+    "median": 2884,
+    "runs": [
+      2884,
+      2884,
+      2924
+    ]
+  },
+  "lcp_discovery_ms": {
+    "median": 2660,
+    "runs": [
+      2656,
+      2660,
+      2664
+    ]
+  },
+  "seat_selection": {
+    "inp_ms": 200,
+    "interactions": 55,
+    "seats_selected": 5,
+    "method": "3D canvas click"
+  }
+}

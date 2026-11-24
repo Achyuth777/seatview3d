@@ -12,14 +12,12 @@ export const httpError = (statusCode: number, code: string, message: string) => 
 export interface Actor { id: string; email: string }
 
 type Row = Record<string, unknown>;
-const EDITABLE = ['name', 'mall', 'neighbourhood', 'providerUrl'] as const;
-export type CinemaPatch = Partial<Record<(typeof EDITABLE)[number], string | null>>;
-
-const COLUMN: Record<(typeof EDITABLE)[number], string> = { name: 'name', mall: 'mall', neighbourhood: 'neighbourhood', providerUrl: 'provider_url' };
+const EDITABLE = ['name', 'mall', 'neighbourhood'] as const;
+export type CinemaPatch = Partial<Record<(typeof EDITABLE)[number] | 'providerUrl', string | null>>;
 
 const iso = (v: unknown) => (v ? new Date(v as string).toISOString() : null);
 
-function toCinema(r: Row, aliases: string[]): Cinema {
+function toCinema(r: Row, aliases: string[], link: Row | undefined): Cinema {
   const o = (r.overrides ?? {}) as CinemaPatch;
   return {
     id: r.id as string,
@@ -28,20 +26,26 @@ function toCinema(r: Row, aliases: string[]): Cinema {
     mall: o.mall !== undefined ? o.mall : (r.mall as string | null),
     neighbourhood: o.neighbourhood ?? (r.neighbourhood as string),
     aliases,
-    providerName: r.provider_name as string | null,
-    providerUrl: o.providerUrl !== undefined ? o.providerUrl : (r.provider_url as string | null),
+    providerName: (link?.provider as string) ?? (r.provider_name as string | null),
+    providerUrl: (link?.url as string) ?? null,
     isDemo: r.is_demo as boolean,
   };
 }
 
-const toAuditorium = (r: Row): Auditorium => ({
-  id: r.id as string,
-  cinemaId: r.cinema_id as string,
-  name: r.name as string,
-  modelId: r.model_id as string | null,
-  verification: r.verification as Auditorium['verification'],
-  note: r.note as string | null,
-});
+/** "Verified layout" needs a current verification record for that exact auditorium, not just a flag. */
+const toAuditorium = (r: Row): Auditorium => {
+  const verified = r.verification === 'verified' && r.latest_verification === 'verified';
+  return {
+    id: r.id as string,
+    cinemaId: r.cinema_id as string,
+    name: r.name as string,
+    modelId: r.model_id as string | null,
+    verification: r.model_id ? (verified ? 'verified' : 'illustrative') : null,
+    note: verified ? `Measured: ${r.verification_source as string}` : (r.note as string | null),
+  };
+};
+const AUDITORIUM_SELECT = `SELECT a.*, v.status AS latest_verification, v.source AS verification_source FROM auditoriums a
+  LEFT JOIN LATERAL (SELECT status, source FROM layout_verifications WHERE auditorium_id = a.id ORDER BY id DESC LIMIT 1) v ON true`;
 
 export const toScreening = (r: Row): Screening => ({
   id: r.id as string,
@@ -64,12 +68,22 @@ const toFilm = (r: Row): Film => ({
   posterUrl: r.poster_url as string | null,
 });
 
+export interface CatalogOptions {
+  /** How long a successful import may be served before it counts as expired. */
+  cacheHours?: number;
+}
+
 export class CatalogStore {
-  constructor(private db: Db, private provider: FeedProvider | null = null, private now: () => Date = () => new Date()) {}
+  private readonly cacheMs: number;
+  constructor(private db: Db, private provider: FeedProvider | null = null, private now: () => Date = () => new Date(), opts: CatalogOptions = {}) {
+    this.cacheMs = (opts.cacheHours ?? 6) * 3_600_000;
+  }
+
+  get providerId() { return this.provider?.id ?? null; }
 
   /**
-   * Loads the bundled directory. Base columns may update; admin overrides, removed aliases, merges,
-   * mappings and retargeted records are never touched.
+   * Loads the bundled directory. Base columns may update; admin overrides, admin provider links,
+   * removed aliases, merges, mappings and verification records are never touched.
    */
   async syncDirectory(): Promise<void> {
     await this.db.transaction(async (tx) => {
@@ -83,6 +97,13 @@ export class CatalogStore {
           [c.id, c.cityId, c.name, c.mall, c.neighbourhood, c.providerName, c.providerUrl, c.isDemo],
         );
         const canonical = await this.canonicalId(tx, c.id);
+        if (c.providerName && c.providerUrl) {
+          await tx.query(
+            `INSERT INTO provider_links (cinema_id, provider, url, source, verified_at) VALUES ($1,$2,$3,'directory',now())
+             ON CONFLICT (cinema_id, provider, kind) DO UPDATE SET url = EXCLUDED.url, updated_at = now() WHERE provider_links.source = 'directory'`,
+            [canonical, c.providerName, c.providerUrl],
+          );
+        }
         for (const alias of c.aliases) {
           await tx.query(
             `INSERT INTO cinema_aliases (city_id, normalized, cinema_id, alias) VALUES ($1,$2,$3,$4) ON CONFLICT (cinema_id, normalized) DO NOTHING`,
@@ -129,11 +150,11 @@ export class CatalogStore {
   private async cinemasWhere(where: string, params: unknown[]): Promise<Cinema[]> {
     const { rows } = await this.db.query<Row>(`SELECT * FROM cinemas WHERE merged_into IS NULL AND ${where} ORDER BY is_demo, name`, params);
     if (!rows.length) return [];
+    const ids = rows.map((r) => r.id);
     const aliases = await this.db.query<{ cinema_id: string; alias: string }>(
-      'SELECT cinema_id, alias FROM cinema_aliases WHERE NOT removed AND cinema_id = ANY($1::text[]) ORDER BY alias',
-      [rows.map((r) => r.id)],
-    );
-    return rows.map((r) => toCinema(r, aliases.rows.filter((a) => a.cinema_id === r.id).map((a) => a.alias)));
+      'SELECT cinema_id, alias FROM cinema_aliases WHERE NOT removed AND cinema_id = ANY($1::text[]) ORDER BY alias', [ids]);
+    const links = await this.db.query<Row>(`SELECT * FROM provider_links WHERE kind = 'showtimes' AND cinema_id = ANY($1::text[]) ORDER BY id`, [ids]);
+    return rows.map((r) => toCinema(r, aliases.rows.filter((a) => a.cinema_id === r.id).map((a) => a.alias), links.rows.find((l) => l.cinema_id === r.id)));
   }
 
   async feedInfo(cityId: string): Promise<FeedInfo> {
@@ -141,8 +162,10 @@ export class CatalogStore {
     const r = rows[0];
     const lastSuccessAt = iso(r?.last_success_at);
     const lastError = (r?.last_error as string | null) ?? null;
-    if (!lastSuccessAt) return { status: 'directory', provider: (r?.provider as string) ?? null, lastSuccessAt: null, lastError };
-    return { status: lastError ? 'stale' : 'live', provider: r!.provider as string, lastSuccessAt, lastError };
+    const base = { provider: (r?.provider as string) ?? null, lastSuccessAt, lastError, lastFailureAt: iso(r?.last_failure_at), expiresAt: iso(r?.expires_at) };
+    if (!lastSuccessAt) return { ...base, status: 'directory' };
+    if (base.expiresAt && new Date(base.expiresAt) < this.now()) return { ...base, status: 'expired' };
+    return { ...base, status: lastError ? 'stale' : 'live' };
   }
 
   async discovery(cityId: string, date?: string): Promise<DiscoveryPayload> {
@@ -150,13 +173,14 @@ export class CatalogStore {
     if (!city) throw httpError(404, 'UNKNOWN_CITY', 'Unknown city.');
     const cinemas = await this.cinemasWhere('city_id = $1', [cityId]);
     const ids = cinemas.map((c) => c.id);
+    // Past shows expire by their start instant (Asia/Kolkata wall clock stored with its offset).
     const { rows } = await this.db.query<Row>(
       `SELECT * FROM screenings WHERE status = 'active' AND cinema_id = ANY($1::text[]) AND starts_at > $2 AND ($3::text IS NULL OR local_date = $3) ORDER BY local_start LIMIT 2000`,
       [ids, this.now().toISOString(), date ?? null],
     );
     const screenings = dedupeScreenings(rows.map(toScreening));
     const films = await this.db.query<Row>('SELECT * FROM films WHERE id = ANY($1::text[])', [[...new Set(screenings.map((s) => s.filmId))]]);
-    const auds = await this.db.query<Row>('SELECT * FROM auditoriums WHERE cinema_id = ANY($1::text[]) ORDER BY name', [ids]);
+    const auds = await this.db.query<Row>(`${AUDITORIUM_SELECT} WHERE a.cinema_id = ANY($1::text[]) ORDER BY a.name`, [ids]);
     return { city, cinemas, films: films.rows.map(toFilm), screenings, auditoriums: auds.rows.map(toAuditorium), feed: await this.feedInfo(cityId) };
   }
 
@@ -171,7 +195,7 @@ export class CatalogStore {
   }
 
   async auditorium(id: string) {
-    const { rows } = await this.db.query<Row>('SELECT * FROM auditoriums WHERE id = $1', [id]);
+    const { rows } = await this.db.query<Row>(`${AUDITORIUM_SELECT} WHERE a.id = $1`, [id]);
     if (!rows[0]) throw httpError(404, 'NOT_FOUND', 'Auditorium not found.');
     const a = toAuditorium(rows[0]);
     const canonical = await this.canonicalId(this.db, a.cinemaId);
@@ -179,7 +203,12 @@ export class CatalogStore {
     return { auditorium: a, cinema: cinema ?? null };
   }
 
-  /** Fetches one city and date. A failure changes no screening, so the last good results stay usable. */
+  /**
+   * Imports one city and date. Idempotent: screening ids hash the provider key, so a rerun updates rather
+   * than duplicates. A failure changes nothing, so cached results stay. An empty answer for a cinema that
+   * has shows is treated as a provider problem, never as cancellations. Alerts are written in the same
+   * transaction, at most once per user, screening and change.
+   */
   async refresh(cityId: string, actor: Actor | null = null, localDate = istDate(this.now())) {
     if (!CITIES.some((c) => c.id === cityId)) throw httpError(404, 'UNKNOWN_CITY', 'Unknown city.');
     const startedAt = this.now().toISOString();
@@ -188,13 +217,17 @@ export class CatalogStore {
         'INSERT INTO feed_runs (city_id, provider, local_date, status, message, shows, actor_email, started_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
         [cityId, this.provider?.id ?? null, localDate, status, message, shows, actor?.email ?? null, startedAt],
       );
+      const ok = status === 'success';
       const failed = status === 'failed';
       await this.db.query(
-        `INSERT INTO feed_state (city_id, provider, last_success_at, last_attempt_at, last_error) VALUES ($1,$2,$3,$4,$5)
+        `INSERT INTO feed_state (city_id, provider, last_success_at, last_attempt_at, last_error, last_failure_at, expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7)
          ON CONFLICT (city_id) DO UPDATE SET provider = EXCLUDED.provider, last_attempt_at = EXCLUDED.last_attempt_at,
            last_success_at = COALESCE(EXCLUDED.last_success_at, feed_state.last_success_at),
-           last_error = CASE WHEN $6::boolean THEN EXCLUDED.last_error WHEN $7::boolean THEN NULL ELSE feed_state.last_error END`,
-        [cityId, this.provider?.id ?? null, status === 'success' ? startedAt : null, startedAt, failed ? message : null, failed, status === 'success'],
+           expires_at = COALESCE(EXCLUDED.expires_at, feed_state.expires_at),
+           last_failure_at = COALESCE(EXCLUDED.last_failure_at, feed_state.last_failure_at),
+           last_error = CASE WHEN $8::boolean THEN EXCLUDED.last_error WHEN $9::boolean THEN NULL ELSE feed_state.last_error END`,
+        [cityId, this.provider?.id ?? null, ok ? startedAt : null, startedAt, failed ? message : null, failed ? startedAt : null,
+          ok ? new Date(this.now().getTime() + this.cacheMs).toISOString() : null, failed, ok],
       );
       return { cityId, status, message, shows };
     };
@@ -219,32 +252,52 @@ export class CatalogStore {
 
     const nowIso = this.now().toISOString();
     let count = 0;
+    const kept: string[] = [];
     await this.db.transaction(async (tx) => {
       for (const { cinemaId, shows } of fetched) {
+        const { rows: before } = await tx.query<Row>(
+          `SELECT * FROM screenings WHERE source = $1 AND cinema_id = $2 AND local_date = $3 AND status = 'active' AND starts_at > $4`,
+          [provider.id, cinemaId, localDate, nowIso]);
+        if (!shows.length && before.length) { kept.push(cinemaId); continue; }
         const seen = new Set<string>();
         for (const s of shows) {
           const id = `${provider.id}-${createHash('sha256').update(s.externalKey).digest('hex').slice(0, 24)}`;
           if (seen.has(id)) continue;
           seen.add(id);
           count++;
+          const prev = before.find((b) => b.id === id);
           const filmId = `${provider.id}-${s.externalFilmId}`;
           await this.upsertFilm(tx, { id: filmId, title: s.title, languages: [], genres: [], posterUrl: s.posterUrl });
           await tx.query(
-            `INSERT INTO screenings (id, source, cinema_id, film_id, local_start, local_date, starts_at, language, format, provider_url, last_seen_at)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+            `INSERT INTO screenings (id, source, cinema_id, film_id, local_start, local_date, starts_at, language, format, provider_url, last_seen_at, fetched_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11)
              ON CONFLICT (id) DO UPDATE SET cinema_id = EXCLUDED.cinema_id, local_start = EXCLUDED.local_start, local_date = EXCLUDED.local_date,
                starts_at = EXCLUDED.starts_at, language = EXCLUDED.language, format = EXCLUDED.format, provider_url = EXCLUDED.provider_url,
-               status = 'active', last_seen_at = EXCLUDED.last_seen_at`,
+               status = 'active', last_seen_at = EXCLUDED.last_seen_at, fetched_at = EXCLUDED.fetched_at`,
             [id, provider.id, cinemaId, filmId, s.localStart, s.localStart.slice(0, 10), istToInstant(s.localStart).toISOString(), s.language, s.format, s.providerUrl, nowIso],
           );
+          if (prev && (prev.local_start !== s.localStart || prev.language !== s.language || prev.format !== s.format)) {
+            await this.alert(tx, id, cinemaId, 'changed', prev.local_start as string, s.localStart, `changed:${s.localStart}:${s.language ?? ''}:${s.format}`);
+          }
         }
-        await tx.query(
-          `UPDATE screenings SET status = 'removed' WHERE source = $1 AND cinema_id = $2 AND local_date = $3 AND status = 'active' AND starts_at > $4 AND NOT (id = ANY($5::text[]))`,
-          [provider.id, cinemaId, localDate, nowIso, [...seen]],
-        );
+        for (const b of before.filter((x) => !seen.has(x.id as string))) {
+          await tx.query(`UPDATE screenings SET status = 'removed' WHERE id = $1`, [b.id]);
+          await this.alert(tx, b.id as string, cinemaId, 'removed', b.local_start as string, null, 'removed');
+        }
       }
     });
-    return record('success', `Imported ${count} showtimes for ${localDate}.`, count);
+    const note = kept.length ? ` The provider returned no shows for ${kept.length} cinema(s) that had shows; those were kept, not cancelled.` : '';
+    return record('success', `Imported ${count} showtimes for ${localDate}.${note}`, count);
+  }
+
+  /** One alert per saved user, screening and change; a repeated import of the same change adds nothing. */
+  private alert(tx: Sql, screeningId: string, cinemaId: string, kind: 'changed' | 'removed', oldStart: string, newStart: string | null, fingerprint: string) {
+    return tx.query(
+      `INSERT INTO alerts (user_id, screening_id, cinema_id, kind, old_start, new_start, fingerprint)
+       SELECT user_id, $1, $2, $3, $4, $5, $6 FROM saved_screenings WHERE screening_id = $1
+       ON CONFLICT (user_id, screening_id, fingerprint) DO NOTHING`,
+      [screeningId, cinemaId, kind, oldStart, newStart, fingerprint],
+    );
   }
 
   private async audit(tx: Sql, actor: Actor, action: string, entity: string, entityId: string, before: unknown, after: unknown) {
@@ -262,18 +315,38 @@ export class CatalogStore {
   }
 
   async correctCinema(actor: Actor, id: string, patch: CinemaPatch) {
-    if (patch.providerUrl && !/^https:\/\//.test(patch.providerUrl)) throw httpError(400, 'BAD_URL', 'Provider link must start with https://');
     if (patch.name !== undefined && !patch.name?.trim()) throw httpError(400, 'BAD_NAME', 'Name is required.');
     if (patch.neighbourhood !== undefined && !patch.neighbourhood?.trim()) throw httpError(400, 'BAD_NEIGHBOURHOOD', 'Neighbourhood is required.');
     await this.db.transaction(async (tx) => {
       const r = await this.requireCinema(tx, id);
       const before = r.overrides as CinemaPatch;
-      const after = { ...before };
+      const after: CinemaPatch = { ...before };
+      delete after.providerUrl;
       for (const k of EDITABLE) if (patch[k] !== undefined) after[k] = patch[k]?.trim() || null;
       await tx.query('UPDATE cinemas SET overrides = $2::jsonb, updated_at = now() WHERE id = $1', [id, JSON.stringify(after)]);
-      await this.audit(tx, actor, 'correct', 'cinema', id, Object.fromEntries(EDITABLE.map((k) => [k, before[k] ?? r[COLUMN[k]]])), after);
+      await this.audit(tx, actor, 'correct', 'cinema', id, Object.fromEntries(EDITABLE.map((k) => [k, before[k] ?? r[k]])), after);
     });
+    if (patch.providerUrl !== undefined) await this.setProviderLink(actor, id, patch.providerUrl);
     return (await this.cinemasWhere('id = $1', [id]))[0]!;
+  }
+
+  /** Fixes a provider link. Admin links are never replaced by the directory sync. */
+  async setProviderLink(actor: Actor, cinemaId: string, url: string | null, provider?: string) {
+    if (url && !/^https:\/\/[^\s]+$/.test(url)) throw httpError(400, 'BAD_URL', 'Provider link must start with https://');
+    await this.db.transaction(async (tx) => {
+      const r = await this.requireCinema(tx, cinemaId);
+      const name = provider ?? (r.provider_name as string | null) ?? 'Provider';
+      const { rows: prev } = await tx.query<Row>(`SELECT url FROM provider_links WHERE cinema_id = $1 AND kind = 'showtimes' ORDER BY id LIMIT 1`, [cinemaId]);
+      if (url) {
+        await tx.query(
+          `INSERT INTO provider_links (cinema_id, provider, url, source, verified_at) VALUES ($1,$2,$3,'admin',now())
+           ON CONFLICT (cinema_id, provider, kind) DO UPDATE SET url = EXCLUDED.url, source = 'admin', verified_at = now(), updated_at = now()`,
+          [cinemaId, name, url]);
+      } else {
+        await tx.query(`DELETE FROM provider_links WHERE cinema_id = $1 AND kind = 'showtimes'`, [cinemaId]);
+      }
+      await this.audit(tx, actor, 'set-provider-link', 'cinema', cinemaId, { url: prev[0]?.url ?? null }, { url });
+    });
   }
 
   async addAlias(actor: Actor, cinemaId: string, alias: string) {
@@ -321,7 +394,8 @@ export class CatalogStore {
     });
   }
 
-  async mapAuditorium(actor: Actor, id: string, input: { cinemaId: string; name: string; modelId: string | null; verification: Auditorium['verification']; note?: string | null }) {
+  /** Maps an auditorium to a 3D model. "verified" also writes a verification record naming the measurement source. */
+  async mapAuditorium(actor: Actor, id: string, input: { cinemaId: string; name: string; modelId: string | null; verification: Auditorium['verification']; note?: string | null; measuredOn?: string | null }) {
     if (!input.name.trim()) throw httpError(400, 'BAD_NAME', 'Auditorium name is required.');
     if (!!input.modelId !== !!input.verification) throw httpError(400, 'BAD_MAPPING', 'A model needs a verification status, and no model means none.');
     if (input.verification === 'verified' && !input.note?.trim()) throw httpError(400, 'NEEDS_SOURCE', 'Record the source of the measurements before marking a layout verified.');
@@ -333,6 +407,13 @@ export class CatalogStore {
          ON CONFLICT (id) DO UPDATE SET cinema_id = EXCLUDED.cinema_id, name = EXCLUDED.name, model_id = EXCLUDED.model_id, verification = EXCLUDED.verification, note = EXCLUDED.note`,
         [id, input.cinemaId, input.name.trim(), input.modelId, input.verification, input.note?.trim() || null],
       );
+      const wasVerified = rows[0]?.verification === 'verified';
+      if (input.verification === 'verified' || wasVerified) {
+        await tx.query(
+          `INSERT INTO layout_verifications (auditorium_id, status, source, measured_on, verified_by) VALUES ($1,$2,$3,$4,$5)`,
+          [id, input.verification === 'verified' ? 'verified' : 'revoked', input.note?.trim() || 'Verification removed', input.measuredOn ?? null, actor.email],
+        );
+      }
       await this.audit(tx, actor, 'map-auditorium', 'auditorium', id, rows[0] ?? null, input);
     });
   }
@@ -350,11 +431,14 @@ export class CatalogStore {
 
   async adminOverview() {
     const cinemas = await this.cinemasWhere('true', []);
-    const auds = await this.db.query<Row>('SELECT * FROM auditoriums ORDER BY cinema_id, name');
+    const auds = await this.db.query<Row>(`${AUDITORIUM_SELECT} ORDER BY a.cinema_id, a.name`);
+    const verifications = await this.db.query<Row>('SELECT id, auditorium_id, status, source, measured_on::text AS measured_on, verified_by, created_at FROM layout_verifications ORDER BY id DESC LIMIT 50');
+    const links = await this.db.query<Row>(`SELECT cinema_id, source, verified_at, updated_at FROM provider_links`);
     const refs = await this.db.query<Row>('SELECT provider, external_id, cinema_id FROM provider_cinemas');
     const state = await this.db.query<Row>('SELECT * FROM feed_state');
     const runs = await this.db.query<Row>('SELECT * FROM feed_runs ORDER BY id DESC LIMIT 30');
-    const audit = await this.db.query<Row>('SELECT * FROM admin_audit ORDER BY id DESC LIMIT 30');
+    const audit = await this.db.query<Row>('SELECT * FROM admin_audit ORDER BY id DESC LIMIT 50');
+    const mail = await this.db.query<Row>(`SELECT id, kind, status, error, attempts, created_at FROM mail_outbox WHERE status = 'failed' ORDER BY id DESC LIMIT 20`);
     const counts = await this.db.query<{ city_id: string; n: string }>(
       `SELECT c.city_id, count(*)::text AS n FROM screenings s JOIN cinemas c ON c.id = s.cinema_id WHERE s.status = 'active' AND NOT s.is_demo AND s.starts_at > $1 GROUP BY c.city_id`,
       [this.now().toISOString()],
@@ -367,15 +451,21 @@ export class CatalogStore {
         const s = state.rows.find((r) => r.city_id === c.id);
         return {
           cityId: c.id, cityName: c.name,
-          lastSuccessAt: iso(s?.last_success_at), lastAttemptAt: iso(s?.last_attempt_at), lastError: (s?.last_error as string) ?? null,
+          lastSuccessAt: iso(s?.last_success_at), lastAttemptAt: iso(s?.last_attempt_at), lastFailureAt: iso(s?.last_failure_at),
+          expiresAt: iso(s?.expires_at), lastError: (s?.last_error as string) ?? null,
           liveShows: Number(counts.rows.find((r) => r.city_id === c.id)?.n ?? 0),
           mappedCinemas: refs.rows.filter((r) => cinemas.find((x) => x.id === r.cinema_id)?.cityId === c.id).length,
         };
       }),
-      cinemas: cinemas.map((c) => ({ ...c, feedRef: (refs.rows.find((r) => r.cinema_id === c.id)?.external_id as string) ?? null })),
+      cinemas: cinemas.map((c) => {
+        const link = links.rows.find((l) => l.cinema_id === c.id);
+        return { ...c, feedRef: (refs.rows.find((r) => r.cinema_id === c.id)?.external_id as string) ?? null, linkSource: (link?.source as string) ?? null, linkVerifiedAt: iso(link?.verified_at) };
+      }),
       auditoriums: auds.rows.map(toAuditorium),
+      verifications: verifications.rows.map((v) => ({ id: String(v.id), auditoriumId: v.auditorium_id, status: v.status, source: v.source, measuredOn: (v.measured_on as string | null) ?? null, by: v.verified_by, at: iso(v.created_at) })),
       runs: runs.rows.map((r) => ({ id: String(r.id), cityId: r.city_id, status: r.status, message: r.message, shows: r.shows, actorEmail: r.actor_email, at: iso(r.finished_at) })),
       audit: audit.rows.map((r) => ({ id: String(r.id), actorEmail: r.actor_email, action: r.action, entity: r.entity, entityId: r.entity_id, after: r.after, at: iso(r.at) })),
+      mailFailures: mail.rows.map((m) => ({ id: String(m.id), kind: m.kind, error: m.error, attempts: m.attempts, at: iso(m.created_at) })),
     };
   }
 }

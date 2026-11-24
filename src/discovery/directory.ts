@@ -50,13 +50,16 @@ export interface Screening {
   isDemo: boolean;
 }
 
-export type FeedStatus = 'live' | 'stale' | 'directory';
+export type FeedStatus = 'live' | 'stale' | 'expired' | 'directory';
 
 export interface FeedInfo {
   status: FeedStatus;
   provider: string | null;
   lastSuccessAt: string | null;
   lastError: string | null;
+  lastFailureAt?: string | null;
+  /** After this, cached times are shown as possibly out of date. */
+  expiresAt?: string | null;
 }
 
 export interface DiscoveryPayload {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import CameraControls from 'camera-controls';
 import * as THREE from 'three';
@@ -32,16 +32,23 @@ interface Props {
   animate: boolean;
   /** Half-angle the subject spans from this pose; narrow screens widen the view to fit it. */
   subjectHalfAngle: number;
+  /** Identifies the pose; onRest reports it once the camera has stopped there (never for a superseded pose). */
+  restKey?: string;
+  onRest?: (key: string, position: { x: number; y: number; z: number }) => void;
 }
 
 /** Drives the camera with camera-controls (MIT, yomotsu/camera-controls). */
-export function CameraRig({ pose, locked, animate, subjectHalfAngle }: Props) {
+export function CameraRig({ pose, locked, animate, subjectHalfAngle, restKey, onRest }: Props) {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
   const dom = useThree((s) => s.gl.domElement);
   const width = useThree((s) => s.size.width);
   const height = useThree((s) => s.size.height);
   const [controls, setControls] = useState<CameraControls | null>(null);
   const targetFov = fitVerticalFov(width / Math.max(height, 1), subjectHalfAngle);
+  const latest = useRef<string | undefined>(undefined);
+  const onRestRef = useRef(onRest);
+  const pendingRest = useRef<string | null>(null);
+  onRestRef.current = onRest;
 
   // Created inside the effect so React StrictMode's mount → unmount → mount cycle
   // never leaves us holding a disposed instance.
@@ -56,8 +63,13 @@ export function CameraRig({ pose, locked, animate, subjectHalfAngle }: Props) {
     if (!controls) return;
     controls.enabled = !locked;
     const { eye, target } = pose;
-    void controls.setLookAt(eye.x, eye.y, eye.z, target.x, target.y, target.z, animate);
-  }, [controls, pose, locked, animate]);
+    // A new pose interrupts any transition in progress; only the latest one may report rest.
+    latest.current = restKey;
+    void controls.setLookAt(eye.x, eye.y, eye.z, target.x, target.y, target.z, animate).then(() => {
+      // Report on the next frame, after controls.update() has actually moved the camera.
+      if (restKey !== undefined && latest.current === restKey) pendingRest.current = restKey;
+    });
+  }, [controls, pose, locked, animate, restKey, camera]);
 
   useFrame((_, delta) => {
     if (Math.abs(camera.fov - targetFov) > 0.01) {
@@ -65,6 +77,14 @@ export function CameraRig({ pose, locked, animate, subjectHalfAngle }: Props) {
       camera.updateProjectionMatrix();
     }
     controls?.update(delta);
+    const key = pendingRest.current;
+    if (key !== null) {
+      pendingRest.current = null;
+      if (key === latest.current) {
+        const p = camera.position;
+        onRestRef.current?.(key, { x: p.x, y: p.y, z: p.z });
+      }
+    }
   });
 
   return null;

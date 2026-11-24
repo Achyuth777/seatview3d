@@ -7,6 +7,7 @@ import { seatColor } from './seatColors';
 import { makeScreenTexture } from './screenTexture';
 
 const SEAT_COLOR = new THREE.Color('#8b2a2a');
+const COMPARE_COLOR = new THREE.Color('#eaf0f7');
 
 // Seat model sizes [assumed]: 0.52 m wide cushion at 0.45 m, backrest to 1.0 m.
 const CUSHION = { w: 0.52, h: 0.12, d: 0.5, y: 0.39 };
@@ -15,11 +16,13 @@ const BACK = { w: 0.52, h: 0.6, d: 0.08, y: 0.72 };
 interface Props {
   layout: CinemaLayout;
   selectedId: string | null;
+  /** A second marked seat (compare mode), drawn in chalk white. */
+  compareId?: string | null;
   states: Map<string, SeatState>;
   onSelect: (seatId: string) => void;
 }
 
-export function CinemaScene({ layout, selectedId, states, onSelect }: Props) {
+export function CinemaScene({ layout, selectedId, compareId = null, states, onSelect }: Props) {
   const { screen, rows, seats, room, params } = layout;
 
   const screenTex = useMemo(
@@ -53,13 +56,13 @@ export function CinemaScene({ layout, selectedId, states, onSelect }: Props) {
   // Colour seats (on selection change).
   useLayoutEffect(() => {
     seats.forEach((s, i) => {
-      const c = seatColor(s.id, SEAT_COLOR, selectedId, states);
+      const c = s.id === compareId ? COMPARE_COLOR : seatColor(s.id, SEAT_COLOR, selectedId, states);
       cushionRef.current!.setColorAt(i, c);
       backRef.current!.setColorAt(i, c);
     });
     cushionRef.current!.instanceColor!.needsUpdate = true;
     backRef.current!.instanceColor!.needsUpdate = true;
-  }, [seats, selectedId, states]);
+  }, [seats, selectedId, compareId, states]);
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();

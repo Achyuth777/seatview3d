@@ -28,6 +28,8 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://seatview:${POSTGRES_PASSWORD}@db:5432/seatview
+      APP_ORIGIN: ${APP_ORIGIN:?set APP_ORIGIN in .env, e.g. https://seatview.example}
+      SESSION_HOURS: ${SESSION_HOURS:-720}
       HOLD_MINUTES: ${HOLD_MINUTES:-10}
       MOVIEGLU_CLIENT: ${MOVIEGLU_CLIENT:-}
       MOVIEGLU_API_KEY: ${MOVIEGLU_API_KEY:-}

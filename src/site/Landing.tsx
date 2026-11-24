@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { EVENTS, LISTINGS, formatMoney, fromPrice, listingForEvent, type ListingKind } from '../booking/catalog';
 import type { VenueKind } from '../booking/types';
 import { CITIES, REAL_CINEMAS, cityById } from '../discovery/directory';
-import { istNow, searchCinemas } from '../discovery/query';
+import { istNow, otherCityMatch, searchCinemas } from '../discovery/query';
 import { ChartSheet, PreviewPanel, SightlineSection } from './chart';
 import { CinemaHead } from './Discover';
 import { formatDate, formatTime } from './format';
+import { readLastSearch } from './lastSearch';
 import { useAccount, useCity, useDiscovery, useLibrary } from './platform';
 import { useProfile } from './profileStore';
 import { Link } from './router';
@@ -20,119 +21,28 @@ const COACHES: { kind: ListingKind; code: string; label: string; to: string }[] 
 
 export function Landing() {
   const { city: selected } = useCity();
-  const city = selected?.name ?? '';
-  const [q, setQ] = useState('');
-  const [swapped, setSwapped] = useState(false);
-  const [active, setActive] = useState<{ venue: VenueKind; id: string }>({ venue: 'cinema', id: EVENTS[0]!.id });
-  const [tab, setTab] = useState(selected?.id ?? 'chennai');
-  useEffect(() => { if (selected) setTab(selected.id); }, [selected?.id]);
-  const tabCity = cityById(tab) ?? CITIES[0]!;
-  const load = useDiscovery(tabCity);
-  const tabCinemas = load.state === 'ok' ? load.data.cinemas.filter((c) => !c.isDemo) : REAL_CINEMAS.filter((c) => c.cityId === tab);
-
-  const needle = q.trim().toLowerCase();
-  const rows = useMemo(() => {
-    const now = istNow();
-    const inCity = EVENTS.filter((e) => !city || e.city === city);
-    const upcoming = inCity.filter((e) => e.startsAt > now);
-    return (upcoming.length ? upcoming : inCity)
-      .filter((e) => {
-        if (!needle) return true;
-        const l = listingForEvent(e.id)!;
-        return [l.title, l.subtitle, l.city, l.home?.short, l.away?.short].join(' ').toLowerCase().includes(needle);
-      })
-      .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
-      .slice(0, 6);
-  }, [city, needle]);
-
-  // Search uses the server's corrected records for the city in view, or the verified directory.
-  const pool = selected && selected.id === tab ? tabCinemas : REAL_CINEMAS.filter((c) => !selected || c.cityId === selected.id);
-  const cinemaHits = needle ? searchCinemas(pool, q).slice(0, 4) : [];
-
   return (
     <>
-      <section className="hero" aria-labelledby="hero-title">
-        <ChartSheet className="hero__sheet">
-          <h1 id="hero-title" className="hero__title">Find your seat before you pay.</h1>
-          <p className="hero__lede">
-            Sit in a 3D model of the hall or stadium, check the view from any seat, then find a real cinema in your city.
-          </p>
-          <label className="search">
-            <span className="visually-hidden">Search films, teams, cinemas, malls or areas</span>
-            <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" /><path d="m13 13 4 4" /></svg>
-            <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Film, team or cinema" />
-          </label>
-          <div className="hero__inline" aria-live="polite">
-            <PreviewPanel venue={active.venue} compact feed={swapped} />
-          </div>
-
-          {cinemaHits.length > 0 && (
-            <div className="lp-hits">
-              <h2 className="lp-table-title">Cinemas</h2>
-              <ul className="dx-list">
-                {cinemaHits.map(({ cinema, matched }) => (
-                  <li key={cinema.id} className="dx-cinema dx-cinema--row">
-                    <CinemaHead cinema={cinema} hit={matched} cityName={selected ? undefined : cityById(cinema.cityId)?.name} />
-                    {cinema.providerUrl && <External href={cinema.providerUrl}>Check showtimes</External>}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {rows.length > 0 && (
-            <h2 className="lp-table-title">Sample schedule <span className="dx-tag dx-tag--demo">Demo</span></h2>
-          )}
-          {rows.length > 0 && <p className="lp-table-note">Made-up shows and fixtures, so you can try the full booking flow.</p>}
-          {rows.length > 0 && (
-            <ChartTable
-              rows={rows.map((e) => ({ eventId: e.id }))}
-              activeId={active.id}
-              onPoint={(eventId) => {
-                const e = EVENTS.find((x) => x.id === eventId)!;
-                if (e.venue !== active.venue) setSwapped(true);
-                setActive({ venue: e.venue, id: e.id });
-              }}
-            />
-          )}
-          {rows.length === 0 && cinemaHits.length === 0 && (
-            <p className="empty">
-              Nothing matches “{q}”{city ? ` in ${city}` : ''}.{' '}
-              <button type="button" className="btn btn--quiet" onClick={() => setQ('')}>Clear search</button>
-            </p>
-          )}
-        </ChartSheet>
-        <div className="hero__preview" aria-live="polite">
-          <PreviewPanel venue={active.venue} feed={swapped} />
-          <Link to={`/book/${active.id}`} className="btn lp-proof-go">Open this seat map</Link>
+      <section className="lp-start" aria-labelledby="hero-title">
+        <h1 id="hero-title" className="lp-start__title">Find your seat before you pay.</h1>
+        <p className="lp-start__lede">Find a real cinema near you, or sit in a 3D hall and compare the view from any two seats.</p>
+        <div className="lp-start__grid">
+          <FindCinema />
+          <Link to="/preview/demo-hall-chennai-1?seat=K12" className="lp-explore">
+            <span className="lp-explore__code" aria-hidden="true">M1</span>
+            <span className="lp-explore__frame">
+              <img src="/views/cinema-K12.png" alt="" width={1200} height={750} decoding="async" fetchPriority="low" />
+            </span>
+            <span className="lp-explore__text">
+              <span className="lp-explore__title">Explore the seat view</span>
+              <span className="lp-explore__note">Pick seats in a modelled 14 m Scope hall and compare two of them. Illustrative demo, not a real venue.</span>
+              <span className="lp-explore__go">Open the seat view</span>
+            </span>
+          </Link>
         </div>
       </section>
 
-      <section className="lp-cinemas" aria-labelledby="lp-cinemas-title">
-        <div className="lp-cinemas__intro">
-          <h2 id="lp-cinemas-title" className="section-title">Going out tonight?</h2>
-          <p>Pick your city and go straight to the cinema’s current showtimes.</p>
-          <div className="lp-cities" role="group" aria-label="Show cinemas in">
-            {CITIES.map((c) => (
-              <button key={c.id} type="button" className={c.id === tab ? 'dx-chip is-on' : 'dx-chip'} aria-pressed={c.id === tab} onClick={() => setTab(c.id)}>
-                {c.name}
-              </button>
-            ))}
-          </div>
-          {load.state === 'ok' && <FeedNote feed={load.data.feed} cityName={tabCity.name} problem={load.problem} />}
-          <Link to={`/movies?city=${tab}`} className="dx-btn">All of {tabCity.name}</Link>
-        </div>
-        <ChartSheet className="lp-cinemas__sheet">
-          <ul className="dx-list">
-            {tabCinemas.map((c) => (
-              <li key={c.id} className="dx-cinema dx-cinema--row">
-                <CinemaHead cinema={c} />
-                {c.providerUrl && <External href={c.providerUrl}>Check showtimes</External>}
-              </li>
-            ))}
-          </ul>
-        </ChartSheet>
-      </section>
+      <DemoSection city={selected?.name ?? ''} />
 
       <section className="how" aria-labelledby="how-title">
         <h2 id="how-title" className="section-title">The view is worked out, not photographed.</h2>
@@ -144,31 +54,131 @@ export function Landing() {
         <SightlineSection />
       </section>
 
-      <section className="train" aria-labelledby="train-title">
-        <h2 id="train-title" className="section-title">Board by category.</h2>
-        <ol className="train__coaches">
-          {COACHES.map((c) => {
-            const list = LISTINGS.filter((l) => l.kind === c.kind && (!city || l.city === city));
-            const next = list.flatMap((l) => l.sessions.map((s) => ({ l, s }))).sort((a, b) => a.s.startsAt.localeCompare(b.s.startsAt))[0];
-            const cinemas = REAL_CINEMAS.filter((x) => !selected || x.cityId === selected.id).length;
-            return (
-              <li key={c.kind} className="coach">
-                <Link to={c.to} className="coach__link">
-                  <span className="coach__code">{c.code}</span>
-                  <span className="coach__label">{c.label}</span>
-                  <span className="coach__count">
-                    {c.kind === 'movie' ? `${cinemas} real cinemas` : `${list.length} sample ${list.length === 1 ? 'fixture' : 'fixtures'}`}
-                  </span>
-                  {next && <span className="coach__next">Next sample: {next.l.title}, {formatDate(next.s.startsAt)}</span>}
-                </Link>
-              </li>
-            );
-          })}
-        </ol>
-      </section>
-
+      <Categories />
       <ReturnBand />
     </>
+  );
+}
+
+/** City, search and real cinemas together: the first thing a phone visitor can reach. */
+function FindCinema() {
+  const { city: selected } = useCity();
+  const [tab, setTab] = useState(selected?.id ?? 'chennai');
+  const [q, setQ] = useState('');
+  useEffect(() => { if (selected) setTab(selected.id); }, [selected?.id]);
+  const tabCity = cityById(tab) ?? CITIES[0]!;
+  const load = useDiscovery(tabCity);
+  const cinemas = load.state === 'ok' ? load.data.cinemas.filter((c) => !c.isDemo) : REAL_CINEMAS.filter((c) => c.cityId === tab);
+  const hits = q.trim() ? searchCinemas(cinemas, q) : cinemas.map((cinema) => ({ cinema, matched: '' }));
+  const elsewhere = q.trim() && !hits.length ? otherCityMatch(tab, q) : null;
+  const last = readLastSearch();
+
+  return (
+    <ChartSheet className="lp-find">
+      <h2 className="lp-find__title" id="find-title">Find a cinema</h2>
+      <div className="lp-cities" role="group" aria-label="City">
+        {CITIES.map((c) => (
+          <button key={c.id} type="button" className={c.id === tab ? 'dx-chip is-on' : 'dx-chip'} aria-pressed={c.id === tab} onClick={() => setTab(c.id)}>
+            {c.name}
+          </button>
+        ))}
+      </div>
+      <label className="search">
+        <span className="visually-hidden">Search cinemas, malls or areas in {tabCity.name}</span>
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" /><path d="m13 13 4 4" /></svg>
+        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Cinema, mall or area`} enterKeyHint="search" />
+      </label>
+      {last && !q && (
+        <Link className="lp-resume" to={`/movies?city=${last.cityId}&q=${encodeURIComponent(last.q)}`}>
+          Continue your search: “{last.q}” in {cityById(last.cityId)?.name}
+        </Link>
+      )}
+      {load.state === 'ok' && load.problem && <FeedNote feed={load.data.feed} cityName={tabCity.name} problem={load.problem} />}
+      <ul className="dx-list" aria-label={`Cinemas in ${tabCity.name}`}>
+        {hits.map(({ cinema, matched }) => (
+          <li key={cinema.id} className="dx-cinema dx-cinema--row">
+            <CinemaHead cinema={cinema} hit={matched || undefined} />
+            {cinema.providerUrl && <External href={cinema.providerUrl} restoreKey={`provider:${cinema.id}`}>Check showtimes</External>}
+          </li>
+        ))}
+      </ul>
+      {elsewhere && (
+        <p className="lp-elsewhere">
+          “{q}” is in {elsewhere.city.name}.{' '}
+          <button type="button" className="btn btn--quiet" onClick={() => setTab(elsewhere.city.id)}>Show {elsewhere.city.name}</button>
+        </p>
+      )}
+      {q.trim() && !hits.length && !elsewhere && (
+        <p className="empty">No cinema in {tabCity.name} matches “{q}”. <button type="button" className="btn btn--quiet" onClick={() => setQ('')}>Clear</button></p>
+      )}
+      <p className="lp-find__more"><Link to={`/movies?city=${tab}${q.trim() ? `&q=${encodeURIComponent(q.trim())}` : ''}`}>All films and cinemas in {tabCity.name}</Link></p>
+    </ChartSheet>
+  );
+}
+
+/** The fictional schedule, kept apart from real cinemas and labelled as a demo. */
+function DemoSection({ city }: { city: string }) {
+  const [swapped, setSwapped] = useState(false);
+  const [active, setActive] = useState<{ venue: VenueKind; id: string }>({ venue: 'cinema', id: EVENTS[0]!.id });
+  const rows = useMemo(() => {
+    const now = istNow();
+    const inCity = EVENTS.filter((e) => !city || e.city === city);
+    const upcoming = inCity.filter((e) => e.startsAt > now);
+    return (upcoming.length ? upcoming : inCity).sort((a, b) => a.startsAt.localeCompare(b.startsAt)).slice(0, 6);
+  }, [city]);
+  if (!rows.length) return null;
+  return (
+    <section className="hero lp-demo" aria-labelledby="demo-title">
+      <ChartSheet className="hero__sheet">
+        <h2 id="demo-title" className="lp-table-title">Demo <span className="lp-demo__sub">sample shows and fixtures</span></h2>
+        <p className="lp-table-note">Made up, so you can try the full booking flow. No payment is taken.</p>
+        <div className="hero__inline" aria-live="polite">
+          <PreviewPanel venue={active.venue} compact feed={swapped} />
+        </div>
+        <ChartTable
+          rows={rows.map((e) => ({ eventId: e.id }))}
+          activeId={active.id}
+          onPoint={(eventId) => {
+            const e = EVENTS.find((x) => x.id === eventId)!;
+            if (e.venue !== active.venue) setSwapped(true);
+            setActive({ venue: e.venue, id: e.id });
+          }}
+        />
+      </ChartSheet>
+      <div className="hero__preview" aria-live="polite">
+        <PreviewPanel venue={active.venue} feed={swapped} />
+        <Link to={`/book/${active.id}`} className="btn lp-proof-go">Open this seat map</Link>
+      </div>
+    </section>
+  );
+}
+
+function Categories() {
+  const { city: selected } = useCity();
+  const city = selected?.name ?? '';
+  return (
+    <section className="train" aria-labelledby="train-title">
+      <h2 id="train-title" className="section-title">Board by category.</h2>
+      <ol className="train__coaches">
+        {COACHES.map((c) => {
+          const list = LISTINGS.filter((l) => l.kind === c.kind && (!city || l.city === city));
+          const next = list.flatMap((l) => l.sessions.map((s) => ({ l, s }))).sort((a, b) => a.s.startsAt.localeCompare(b.s.startsAt))[0];
+          const cinemas = REAL_CINEMAS.filter((x) => !selected || x.cityId === selected.id).length;
+          return (
+            <li key={c.kind} className="coach">
+              <Link to={c.to} className="coach__link">
+                <span className="coach__code">{c.code}</span>
+                <span className="coach__label">{c.label}</span>
+                <span className="coach__count">
+                  {c.kind === 'movie' ? `${cinemas} real cinemas` : `${list.length} sample ${list.length === 1 ? 'fixture' : 'fixtures'}`}
+                </span>
+                {next && <span className="coach__next">Next sample: {next.l.title}, {formatDate(next.s.startsAt)}</span>}
+              </Link>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
   );
 }
 
@@ -243,7 +253,7 @@ export function ChartTable({
               <td>
                 <div className="chart__event">
                   <span>
-                    <Link to={`/event/${l.id}`} className="chart__title">{l.title}</Link>
+                    <Link to={`/event/${l.id}`} className="chart__title" data-restore-key={`event:${eventId}`}>{l.title}</Link>
                     <span className="chart__sub">{l.subtitle}</span>
                   </span>
                 </div>

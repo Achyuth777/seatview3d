@@ -93,6 +93,8 @@ describe('platform API', () => {
     const email = `u${++n}@example.com`;
     const res = await call('POST', '/api/auth/register', undefined, { email, password: 'correct-horse-1', name });
     expect(res.statusCode).toBe(201);
+    // These tests are about saving and admin; email verification has its own tests.
+    await db.query('UPDATE users SET email_verified_at = now() WHERE email = $1', [email]);
     return { email, id: res.json().user.id as string, cookie: String(res.headers['set-cookie']).split(';')[0]! };
   };
   const admin = async () => { const u = await signUp('Admin'); await accounts.setRole(u.email, 'admin'); return u; };
@@ -138,7 +140,7 @@ describe('platform API', () => {
       expect((await call('PUT', '/api/admin/auditoriums/x', cookie, { cinemaId: 'chn-pvr-vr', name: 'S', modelId: null, verification: null })).statusCode).toBe(want);
     }
     await call('PATCH', '/api/me', u.cookie, { role: 'admin' });
-    expect((await call('GET', '/api/me', u.cookie)).json().user.role).toBe('user');
+    expect((await call('GET', '/api/me', u.cookie)).json().user).not.toHaveProperty('role');
     expect((await call('GET', '/api/admin/overview', u.cookie)).statusCode).toBe(403);
   });
 

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 /** A showtime as a provider reports it, in Asia/Kolkata wall-clock time. */
 export interface RawShow {
   /** Stable per provider, so a corrected time updates the same screening. */
@@ -77,6 +79,21 @@ export function movieGluProvider(creds: MovieGluCredentials, fetcher: typeof fet
       if (res.status === 204) return [];
       if (!res.ok) throw new Error(`MovieGlu returned HTTP ${res.status}`);
       return parseMovieGlu(externalCinemaId, localDate, (await res.json()) as { films?: MgFilm[] });
+    },
+  };
+}
+
+/**
+ * SIMULATED provider for development and end-to-end tests: reads showtimes from a JSON file
+ * ({ "fail": false | "message", "cinemas": { "<externalId>": RawShow[] } }). Refused in production.
+ */
+export function fixtureProvider(file: string): FeedProvider {
+  return {
+    id: 'fixture',
+    async fetchCinema(externalCinemaId, localDate) {
+      const data = JSON.parse(readFileSync(file, 'utf8')) as { fail?: boolean | string; cinemas?: Record<string, RawShow[]> };
+      if (data.fail) throw new Error(typeof data.fail === 'string' ? data.fail : 'Fixture provider outage (simulated)');
+      return (data.cinemas?.[externalCinemaId] ?? []).filter((s) => s.localStart.startsWith(localDate));
     },
   };
 }

@@ -28,7 +28,8 @@ export function useBooking(service: BookingService, eventId: string) {
     setStage('select');
     setBooking(null);
     setError(null);
-    void refresh();
+    // A failed first load (backend unreachable) becomes a visible message, not an uncaught error.
+    refresh().catch(() => setError('Can’t reach the booking server right now. Seat availability may be out of date.'));
     return () => {
       if (holdRef.current) void service.release(holdRef.current.id);
     };
@@ -55,7 +56,7 @@ export function useBooking(service: BookingService, eventId: string) {
       setHold(null);
       setStage('select');
       setError('Your hold expired and the seats were released.');
-      void refresh();
+      refresh().catch(() => undefined);
     }
   }, [now, hold, service, refresh]);
 
