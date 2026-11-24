@@ -13,14 +13,13 @@ export default defineConfig({
     // The only chunk over Vite's 500 kB default is three.js itself (~790 kB, ~200 kB gzipped),
     // a single library that cannot be split further.
     chunkSizeWarningLimit: 850,
-    // three.js changes rarely; keeping it (and React) in their own long-cacheable chunks means an
-    // app update only re-downloads the small app chunk.
+    // React sits in its own long-cacheable chunk. three.js is only reachable through the lazy 3D
+    // routes, so the bundler splits it out and discovery pages never download it.
     rolldownOptions: {
       output: {
         codeSplitting: {
           groups: [
-            { name: 'three', test: /node_modules[\\/](three|camera-controls)[\\/]/ },
-            { name: 'react', test: /node_modules[\\/](react|react-dom|scheduler|@react-three)[\\/]/ },
+            { name: 'react', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
           ],
         },
       },

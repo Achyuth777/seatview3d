@@ -1,0 +1,27 @@
+{
+  "label": "after-M3",
+  "profile": "Chromium 390x844, 4x CPU slowdown, 150 ms RTT, 1.6 Mbps down",
+  "at": "2026-11-24T08:36:52.622Z",
+  "lcp_landing_ms": {
+    "median": 1736,
+    "runs": [
+      1720,
+      1736,
+      1816
+    ]
+  },
+  "lcp_discovery_ms": {
+    "median": 1432,
+    "runs": [
+      1348,
+      1432,
+      1472
+    ]
+  },
+  "seat_selection": {
+    "inp_ms": 168,
+    "interactions": 5,
+    "seats_selected": 5,
+    "method": "2D seat map"
+  }
+}
