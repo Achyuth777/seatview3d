@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { CITIES, type Cinema } from '../discovery/directory';
 import { directoryPayload, groupByCinema } from '../discovery/query';
 import { NotFound } from './NotFound';
-import { api, ApiError, connectionProblem, HAS_SERVER, isMissingRoute, useConnectionEpoch, type CinemaDetail, type ConnectionProblem } from './platform';
+import { api, ApiError, connectionProblem, HAS_SERVER, isMissingRoute, useConnectionEpoch, useFreshnessTick, type CinemaDetail, type ConnectionProblem } from './platform';
 import { Link, navigate } from './router';
 import { External, FavouriteButton, FeedNote, FilmRow, ModelBadge } from './showParts';
 
@@ -21,6 +21,7 @@ function bundled(id: string): CinemaDetail | null {
 export function CinemaPage({ id }: { id: string }) {
   const [state, setState] = useState<{ detail: CinemaDetail | null; problem: ConnectionProblem | null; loading: boolean }>({ detail: null, problem: null, loading: true });
   const epoch = useConnectionEpoch();
+  const fresh = useFreshnessTick();
   useEffect(() => {
     let live = true;
     if (!HAS_SERVER) { setState({ detail: bundled(id), problem: null, loading: false }); return; }
@@ -37,7 +38,7 @@ export function CinemaPage({ id }: { id: string }) {
         setState({ detail: absent ? null : bundled(id), problem: absent ? null : connectionProblem(e), loading: false });
       });
     return () => { live = false; };
-  }, [id, epoch]);
+  }, [id, epoch, fresh]);
 
   if (state.loading) return <div className="dx"><p className="dx-feed" role="status">Loading cinema…</p></div>;
   if (!state.detail) return <NotFound />;

@@ -221,7 +221,7 @@ export function buildApp(service: BookingService, opts: AppOptions = {}): Fastif
   app.setNotFoundHandler((req, reply) => {
     // Client-side routes (/movies, /event/…, /profile) load the app shell when serving the build.
     if (opts.staticDir && req.method === 'GET' && !req.url.startsWith('/api') && (req.headers.accept ?? '').includes('text/html')) {
-      return reply.header('cache-control', 'no-cache').sendFile('index.html');
+      return reply.header('cache-control', 'no-cache').sendFile(req.url.startsWith('/admin') ? 'admin.html' : 'index.html');
     }
     return reply.status(404).send({ code: 'NOT_FOUND', message: `Route ${req.method} ${req.url.split('?')[0]} not found` });
   });

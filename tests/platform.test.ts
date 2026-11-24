@@ -140,7 +140,7 @@ describe('platform API', () => {
       expect((await call('PUT', '/api/admin/auditoriums/x', cookie, { cinemaId: 'chn-pvr-vr', name: 'S', modelId: null, verification: null })).statusCode).toBe(want);
     }
     await call('PATCH', '/api/me', u.cookie, { role: 'admin' });
-    expect((await call('GET', '/api/me', u.cookie)).json().user.role).toBe('user');
+    expect((await call('GET', '/api/me', u.cookie)).json().user).not.toHaveProperty('role');
     expect((await call('GET', '/api/admin/overview', u.cookie)).statusCode).toBe(403);
   });
 

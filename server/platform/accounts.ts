@@ -5,6 +5,7 @@ import { CITIES, type Screening } from '../../src/discovery/directory';
 import { istNow } from '../../src/discovery/query';
 import type { Db } from '../db';
 import { httpError, toScreening, type CatalogStore } from './catalogStore';
+import { newTotpSecret, otpauthUri, verifyTotp } from './totp';
 import type { Mailer } from './mailer';
 
 const scrypt = promisify(scryptCb) as (p: string, s: Buffer, len: number) => Promise<Buffer>;
@@ -173,12 +174,38 @@ This link expires in 1 hour. If you didn't ask for this, ignore this email.` });
   logout = (token: string) => this.db.query('DELETE FROM user_sessions WHERE token_hash = $1', [tokenHash(token)]);
 
   async userForToken(token: string | undefined): Promise<PublicUser | null> {
+    return (await this.sessionForToken(token))?.user ?? null;
+  }
+
+  /** The signed-in user plus this session's second-factor state. Role and MFA are re-read on every request. */
+  async sessionForToken(token: string | undefined): Promise<{ user: PublicUser; mfaVerified: boolean; mfaEnrolled: boolean } | null> {
     if (!token) return null;
     const { rows } = await this.db.query<Row>(
-      'SELECT u.* FROM user_sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1 AND s.expires_at > $2',
+      'SELECT u.*, s.mfa_verified_at FROM user_sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1 AND s.expires_at > $2',
       [tokenHash(token), this.now().toISOString()],
     );
-    return rows[0] ? toUser(rows[0]) : null;
+    const r = rows[0];
+    return r ? { user: toUser(r), mfaVerified: !!r.mfa_verified_at, mfaEnrolled: !!r.totp_enabled_at } : null;
+  }
+
+  /** Starts (or restarts) TOTP enrolment. The secret is shown once, to its owner, for their authenticator app. */
+  async enrollTotp(user: PublicUser) {
+    const { rows } = await this.db.query<Row>('SELECT totp_enabled_at FROM users WHERE id = $1', [user.id]);
+    if (rows[0]?.totp_enabled_at) throw httpError(409, 'MFA_ENROLLED', 'Two-step sign-in is already set up for this account.');
+    const secret = newTotpSecret();
+    await this.db.query('UPDATE users SET totp_secret = $2 WHERE id = $1', [user.id, secret]);
+    return { secret, uri: otpauthUri(secret, user.email) };
+  }
+
+  /** Checks a code; on success the first use enables TOTP and this session counts as second-factor verified. */
+  async verifyTotpForSession(user: PublicUser, sessionToken: string, code: string) {
+    const { rows } = await this.db.query<Row>('SELECT totp_secret FROM users WHERE id = $1', [user.id]);
+    const secret = rows[0]?.totp_secret as string | null;
+    if (!secret) throw httpError(409, 'MFA_NOT_STARTED', 'Set up two-step sign-in first.');
+    if (!verifyTotp(secret, code.trim(), this.now().getTime())) throw httpError(401, 'BAD_CODE', 'That code didn’t match. Check your authenticator app and try again.');
+    const at = this.now().toISOString();
+    await this.db.query('UPDATE users SET totp_enabled_at = COALESCE(totp_enabled_at, $2) WHERE id = $1', [user.id, at]);
+    await this.db.query('UPDATE user_sessions SET mfa_verified_at = $2 WHERE token_hash = $1', [tokenHash(sessionToken), at]);
   }
 
   async updateProfile(userId: string, p: { name?: string; homeCity?: string | null; languages?: string[]; notify?: Partial<PublicUser['notify']> }) {

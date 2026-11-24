@@ -41,7 +41,6 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  role: 'user' | 'admin';
   homeCity: string | null;
   languages: string[];
   notify: { showChanges: boolean; emailReminders: boolean };
@@ -152,7 +151,30 @@ export function useDiscovery(city: City | null): LoadState<DiscoveryPayload> {
       .catch((e) => live && set({ state: 'ok', data: directoryPayload(city), problem: connectionProblem(e) }));
     return () => { live = false; };
   }, [city?.id, version]);
+  // Quiet revalidation: admin corrections and new imports reach an open page without a reload.
+  const tick = useFreshnessTick();
+  useEffect(() => {
+    if (!tick || !city || !HAS_SERVER) return;
+    let live = true;
+    api<DiscoveryPayload>(`/api/discovery?city=${city.id}`).then((data) => live && set({ state: 'ok', data, problem: null })).catch(() => undefined);
+    return () => { live = false; };
+  }, [tick]);
   return s;
+}
+
+/** How long an open page may show data before it revalidates (also on tab focus). See docs/milestones/M5.md. */
+export const FRESHNESS_MS = 30_000;
+export function useFreshnessTick(): number {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!HAS_SERVER) return;
+    const bump = () => { if (!document.hidden) setTick((t) => t + 1); };
+    const id = window.setInterval(bump, FRESHNESS_MS);
+    window.addEventListener('focus', bump);
+    document.addEventListener('visibilitychange', bump);
+    return () => { window.clearInterval(id); window.removeEventListener('focus', bump); document.removeEventListener('visibilitychange', bump); };
+  }, []);
+  return tick;
 }
 
 export interface CinemaDetail {

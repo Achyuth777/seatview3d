@@ -432,7 +432,7 @@ export class CatalogStore {
   async adminOverview() {
     const cinemas = await this.cinemasWhere('true', []);
     const auds = await this.db.query<Row>(`${AUDITORIUM_SELECT} ORDER BY a.cinema_id, a.name`);
-    const verifications = await this.db.query<Row>('SELECT * FROM layout_verifications ORDER BY id DESC LIMIT 50');
+    const verifications = await this.db.query<Row>('SELECT id, auditorium_id, status, source, measured_on::text AS measured_on, verified_by, created_at FROM layout_verifications ORDER BY id DESC LIMIT 50');
     const links = await this.db.query<Row>(`SELECT cinema_id, source, verified_at, updated_at FROM provider_links`);
     const refs = await this.db.query<Row>('SELECT provider, external_id, cinema_id FROM provider_cinemas');
     const state = await this.db.query<Row>('SELECT * FROM feed_state');
@@ -462,7 +462,7 @@ export class CatalogStore {
         return { ...c, feedRef: (refs.rows.find((r) => r.cinema_id === c.id)?.external_id as string) ?? null, linkSource: (link?.source as string) ?? null, linkVerifiedAt: iso(link?.verified_at) };
       }),
       auditoriums: auds.rows.map(toAuditorium),
-      verifications: verifications.rows.map((v) => ({ id: String(v.id), auditoriumId: v.auditorium_id, status: v.status, source: v.source, measuredOn: v.measured_on ? String(v.measured_on).slice(0, 10) : null, by: v.verified_by, at: iso(v.created_at) })),
+      verifications: verifications.rows.map((v) => ({ id: String(v.id), auditoriumId: v.auditorium_id, status: v.status, source: v.source, measuredOn: (v.measured_on as string | null) ?? null, by: v.verified_by, at: iso(v.created_at) })),
       runs: runs.rows.map((r) => ({ id: String(r.id), cityId: r.city_id, status: r.status, message: r.message, shows: r.shows, actorEmail: r.actor_email, at: iso(r.finished_at) })),
       audit: audit.rows.map((r) => ({ id: String(r.id), actorEmail: r.actor_email, action: r.action, entity: r.entity, entityId: r.entity_id, after: r.after, at: iso(r.at) })),
       mailFailures: mail.rows.map((m) => ({ id: String(m.id), kind: m.kind, error: m.error, attempts: m.attempts, at: iso(m.created_at) })),

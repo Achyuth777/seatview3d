@@ -233,7 +233,6 @@ function Preferences({ user }: { user: User }) {
         {msg && <p className={msg.ok ? 'dx-ok' : 'dx-error'} role="status">{msg.text}</p>}
         <div className="dx-actions">
           <button className="dx-btn dx-btn--ink">Save</button>
-          {user.role === 'admin' && <Link className="dx-btn" to="/admin">Admin</Link>}
           <button type="button" className="dx-link" onClick={() => void signOut()}>Sign out</button>
         </div>
       </form>

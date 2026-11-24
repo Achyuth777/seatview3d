@@ -15,6 +15,8 @@ export interface PlatformDeps {
 }
 
 const COOKIE = 'sv_session';
+/** What the browser may see about a user: never the role. */
+const view = (u: PublicUser | null) => { if (!u) return null; const { role: _role, ...rest } = u; return rest; };
 const ID = '^[A-Za-z0-9_-]{1,80}$';
 const idParam = (...names: string[]) => ({
   type: 'object',
@@ -56,11 +58,44 @@ export function registerPlatform(app: FastifyInstance, deps: PlatformDeps, limit
     if (!user) throw httpError(401, 'SIGN_IN_REQUIRED', 'Sign in to continue.');
     return user;
   };
+  /** Every admin read and write: signed in, admin role now (not when the session started), and MFA when required. */
   const requireAdmin = async (req: FastifyRequest): Promise<PublicUser> => {
-    const user = await requireUser(req);
-    if (user.role !== 'admin') throw httpError(403, 'ADMIN_ONLY', 'Admin access required.');
-    return user;
+    const s = await accounts.sessionForToken(readCookie(req));
+    if (!s) throw httpError(401, 'SIGN_IN_REQUIRED', 'Sign in to continue.');
+    if (s.user.role !== 'admin') throw httpError(403, 'ADMIN_ONLY', 'Admin access required.');
+    if (deps.adminMfaRequired && !s.mfaVerified) throw httpError(403, 'MFA_REQUIRED', 'Enter your two-step code to continue.');
+    return s.user;
   };
+
+  app.get('/api/admin/session', { config }, async (req, reply) => {
+    noStore(reply);
+    const s = await accounts.sessionForToken(readCookie(req));
+    if (!s) throw httpError(401, 'SIGN_IN_REQUIRED', 'Sign in to continue.');
+    if (s.user.role !== 'admin') throw httpError(403, 'ADMIN_ONLY', 'This account doesn’t have admin access.');
+    return { email: s.user.email, name: s.user.name, mfa: { required: !!deps.adminMfaRequired, enrolled: s.mfaEnrolled, verified: s.mfaVerified } };
+  });
+  const adminWithoutMfa = async (req: FastifyRequest) => {
+    const s = await accounts.sessionForToken(readCookie(req));
+    if (!s) throw httpError(401, 'SIGN_IN_REQUIRED', 'Sign in to continue.');
+    if (s.user.role !== 'admin') throw httpError(403, 'ADMIN_ONLY', 'Admin access required.');
+    return s.user;
+  };
+  app.post('/api/admin/mfa/enroll', { config: strict }, async (req, reply) => {
+    noStore(reply);
+    return accounts.enrollTotp(await adminWithoutMfa(req));
+  });
+  app.post<{ Body: { code: string } }>('/api/admin/mfa/verify', {
+    config: strict, schema: { body: { type: 'object', required: ['code'], additionalProperties: false, properties: { code: str(8) } } },
+  }, async (req, reply) => {
+    await accounts.verifyTotpForSession(await adminWithoutMfa(req), readCookie(req)!, req.body.code);
+    return reply.status(204).send();
+  });
+  app.put<{ Params: { id: string }; Body: { url: string | null } }>('/api/admin/cinemas/:id/provider-link', {
+    config, schema: { params: idParam('id'), body: { type: 'object', required: ['url'], additionalProperties: false, properties: { url: nullable(400) } } },
+  }, async (req, reply) => {
+    await catalog.setProviderLink(await requireAdmin(req), req.params.id, req.body.url);
+    return reply.status(204).send();
+  });
   const noStore = (reply: FastifyReply) => reply.header('cache-control', 'no-store');
   /** Saving and importing need a confirmed email address. */
   const requireVerified = async (req: FastifyRequest): Promise<PublicUser> => {
@@ -72,7 +107,7 @@ export function registerPlatform(app: FastifyInstance, deps: PlatformDeps, limit
   app.get('/api/config', { config }, async () => ({ emailDelivery: accounts.emailDelivery, showtimeProvider: deps.feedProviderId }));
 
   const tokenBody = { body: { type: 'object', required: ['token'], additionalProperties: false, properties: { token: str(100) } } };
-  app.post<{ Body: { token: string } }>('/api/auth/verify', { config: strict, schema: tokenBody }, async (req) => ({ user: await accounts.verifyEmail(req.body.token) }));
+  app.post<{ Body: { token: string } }>('/api/auth/verify', { config: strict, schema: tokenBody }, async (req) => ({ user: view(await accounts.verifyEmail(req.body.token)) }));
   app.post('/api/auth/resend-verification', { config: strict }, async (req, reply) => {
     await accounts.sendVerification(await requireUser(req));
     return reply.status(204).send();
@@ -121,13 +156,13 @@ export function registerPlatform(app: FastifyInstance, deps: PlatformDeps, limit
   app.post<{ Body: { email: string; password: string; name?: string } }>('/api/auth/register', { config: strict, schema: credentials }, async (req, reply) => {
     const { user, token } = await accounts.register({ email: req.body.email, password: req.body.password, name: req.body.name ?? '' });
     setCookie(req, reply, token, accounts.sessionHours * 3600);
-    return reply.status(201).send({ user });
+    return reply.status(201).send({ user: view(user) });
   });
   app.post<{ Body: { email: string; password: string } }>('/api/auth/login', { config: strict, schema: credentials }, async (req, reply) => {
     const { user, token } = await accounts.login(req.body.email, req.body.password);
     setCookie(req, reply, token, accounts.sessionHours * 3600);
     noStore(reply);
-    return { user };
+    return { user: view(user) };
   });
   app.post('/api/auth/logout', { config }, async (req, reply) => {
     const token = readCookie(req);
@@ -138,7 +173,7 @@ export function registerPlatform(app: FastifyInstance, deps: PlatformDeps, limit
 
   app.get('/api/me', { config }, async (req, reply) => {
     noStore(reply);
-    return { user: await accounts.userForToken(readCookie(req)) };
+    return { user: view(await accounts.userForToken(readCookie(req))) };
   });
   app.patch<{ Body: { name?: string; homeCity?: string | null; languages?: string[]; notify?: { showChanges?: boolean; emailReminders?: boolean } } }>('/api/me', {
     config,
@@ -147,7 +182,7 @@ export function registerPlatform(app: FastifyInstance, deps: PlatformDeps, limit
       languages: { type: 'array', maxItems: 12, items: str(30) },
       notify: { type: 'object', additionalProperties: false, properties: { showChanges: { type: 'boolean' }, emailReminders: { type: 'boolean' } } },
     } } },
-  }, async (req) => ({ user: await accounts.updateProfile((await requireUser(req)).id, req.body) }));
+  }, async (req) => ({ user: view(await accounts.updateProfile((await requireUser(req)).id, req.body)) }));
 
   app.get('/api/me/library', { config }, async (req, reply) => {
     noStore(reply);
@@ -226,10 +261,10 @@ export function registerPlatform(app: FastifyInstance, deps: PlatformDeps, limit
     await catalog.setFeedRef(admin, req.params.id, deps.feedProviderId, req.body.externalId);
     return reply.status(204).send();
   });
-  app.put<{ Params: { id: string }; Body: { cinemaId: string; name: string; modelId: string | null; verification: 'verified' | 'illustrative' | null; note?: string | null } }>('/api/admin/auditoriums/:id', {
+  app.put<{ Params: { id: string }; Body: { cinemaId: string; name: string; modelId: string | null; verification: 'verified' | 'illustrative' | null; note?: string | null; measuredOn?: string | null } }>('/api/admin/auditoriums/:id', {
     config,
     schema: { params: idParam('id'), body: { type: 'object', required: ['cinemaId', 'name', 'modelId', 'verification'], additionalProperties: false, properties: {
-      cinemaId: { type: 'string', pattern: ID }, name: str(80), modelId: { enum: ['scope-14m', null] }, verification: { enum: ['verified', 'illustrative', null] }, note: nullable(400),
+      cinemaId: { type: 'string', pattern: ID }, name: str(80), modelId: { enum: ['scope-14m', null] }, verification: { enum: ['verified', 'illustrative', null] }, note: nullable(400), measuredOn: { type: ['string', 'null'], pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
     } } },
   }, async (req, reply) => {
     await catalog.mapAuditorium(await requireAdmin(req), req.params.id, req.body);

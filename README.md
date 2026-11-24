@@ -118,13 +118,16 @@ Cities, cinemas, auditoriums, films and screenings are separate records with sta
 
 ### First admin
 
-Create an account in the app, then run this on the server with the same database settings:
+1. The person creates an account in the app and confirms their email.
+2. On the server, with the same database settings, run:
 
 ```bash
-npm run admin:grant -- you@example.com
+npm run admin:grant -- person@example.com
 ```
 
-Add `--revoke` to remove access. The admin workspace is at `/admin`.
+3. They open `/admin` (a separate app), sign in, add the setup key to an authenticator app, and enter a code. Two-step sign-in is required when `ADMIN_MFA_REQUIRED=true`, the default in production.
+
+Add `--revoke` to remove access. It takes effect on the person's next request.
 
 ## Configuration
 

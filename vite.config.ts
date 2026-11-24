@@ -16,6 +16,8 @@ export default defineConfig({
     // React sits in its own long-cacheable chunk. three.js is only reachable through the lazy 3D
     // routes, so the bundler splits it out and discovery pages never download it.
     rolldownOptions: {
+      // Two entry points: the public site and the admin app (admin.html), so admin code never ships to visitors.
+      input: { main: 'index.html', admin: 'admin.html' },
       output: {
         codeSplitting: {
           groups: [
