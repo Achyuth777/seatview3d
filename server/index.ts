@@ -37,6 +37,7 @@ const accounts = new Accounts(db, catalog, service, undefined, { mailer: new Out
 const app = buildApp(service, {
   platform: { catalog, accounts, feedProviderId: feed?.id ?? null, devOutbox: config.devOutbox, catalogDb: db, adminMfaRequired: config.adminMfaRequired },
   logger: { level: config.logLevel },
+  httpsOrigin: config.appOrigin.startsWith('https://'),
   rateLimit: { max: config.rateLimitMax, holdsMax: config.rateLimitHoldsMax },
   allowedOrigins: config.allowedOrigins,
   trustProxy: config.trustProxy,

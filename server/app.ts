@@ -38,6 +38,8 @@ export interface AppOptions {
   staticDir?: string;
   /** Discovery, accounts and admin routes. */
   platform?: PlatformDeps;
+  /** The public origin is https (production): browsers are told to upgrade any http subresource. */
+  httpsOrigin?: boolean;
 }
 
 /** REST API mirroring the BookingService interface, plus optional static frontend hosting. */
@@ -72,7 +74,11 @@ export function buildApp(service: BookingService, opts: AppOptions = {}): Fastif
   void app.register(helmet, {
     // Default CSP (self + inline styles); 'self' covers the API and the built app on one origin.
     // Film posters from a licensed feed are the only remote images.
-    contentSecurityPolicy: { directives: { imgSrc: ["'self'", 'data:', 'https:'] } },
+    contentSecurityPolicy: {
+      // upgrade-insecure-requests only when the site itself is served over https: Safari applies it even to
+      // http://127.0.0.1, rewriting every script URL to https and leaving a blank page.
+      directives: { imgSrc: ["'self'", 'data:', 'https:'], upgradeInsecureRequests: opts.httpsOrigin ? [] : null },
+    },
     crossOriginEmbedderPolicy: false,
   });
   void app.register(compress, { threshold: 1024 });

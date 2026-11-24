@@ -46,6 +46,18 @@ describe('structured logs', () => {
   });
 });
 
+describe('content security policy', () => {
+  it('upgrades insecure requests only for an https origin', async () => {
+    const booking = { getAvailability: async () => ({ sold: new Set<string>(), heldByOthers: new Set<string>() }) } as never;
+    for (const [httpsOrigin, expected] of [[true, true], [false, false]] as const) {
+      const app = buildApp(booking, { httpsOrigin });
+      const csp = String((await app.inject({ method: 'GET', url: '/api/health' })).headers['content-security-policy']);
+      expect(csp.includes('upgrade-insecure-requests')).toBe(expected);
+      await app.close();
+    }
+  });
+});
+
 describe('startup configuration', () => {
   const prod = { NODE_ENV: 'production', DATABASE_URL: 'postgres://u:p@db:5432/seatview', APP_ORIGIN: 'https://seatview.example' };
   const fails = (env: Record<string, string>) => {

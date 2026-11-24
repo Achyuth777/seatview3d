@@ -114,7 +114,8 @@ test('failure: an unknown auditorium shows not found, not a generic map', async 
   await expect(page.locator('.pv-map')).toHaveCount(0);
 });
 
-test('low-power profile: selection still lands on the last seat', async ({ page }) => {
+test('low-power profile: selection still lands on the last seat', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'CPU throttling needs the Chromium DevTools protocol');
   await page.goto(`${PREVIEW}?seat=K12`);
   await expectCameraAt(page, 'K12');
   await lowPowerProfile(page);

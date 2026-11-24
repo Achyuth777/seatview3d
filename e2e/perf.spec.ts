@@ -7,6 +7,7 @@ import { lowPowerProfile, measureLcp, readInp, watchInteractions } from './suppo
  * PERF_LABEL names the output file in docs/perf/. Run with --project=chromium-mobile.
  */
 const label = process.env.PERF_LABEL ?? 'run';
+test.skip(!process.env.PERF_LABEL, 'performance runs only when PERF_LABEL is set');
 const results: Record<string, unknown> = { label, profile: 'Chromium 390x844, 4x CPU slowdown, 150 ms RTT, 1.6 Mbps down', at: new Date().toISOString() };
 
 test.afterAll(() => {

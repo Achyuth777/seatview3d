@@ -12,6 +12,7 @@ const shot = (page: Page, name: string, project: string) =>
   page.screenshot({ path: `${dir}/${mode}-${name}-${project.includes('desktop') ? '1440' : '390'}.png`, fullPage: false });
 
 test('baseline pages and feature matrix', async ({ page }, info) => {
+  test.skip(!process.env.MODE, 'records the M1 starting state; run with MODE=full|frontend-only|outage');
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   const matrix: Record<string, string> = {};
