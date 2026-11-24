@@ -1,3 +1,6 @@
+import { loadMigrations as loadAllMigrations } from '../server/migrate';
+/** Every migration in server/migrations, so adding one never needs a test edit. */
+const ALL_VERSIONS = loadAllMigrations().map((m) => m.version);
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mockSoldSeats } from '../src/booking/mockSales';
 import { BookingError } from '../src/booking/types';
@@ -114,9 +117,9 @@ describe.skipIf(!usingPostgres)('real PostgreSQL: migrations', () => {
     await reset.close();
     const [a, b, c] = await Promise.all([extraConnection(), extraConnection(), extraConnection()]);
     const results = await Promise.all([migrate(a!), migrate(b!), migrate(c!)]);
-    expect(results.flat().sort((x, y) => x - y)).toEqual([1, 2, 3, 4]); // applied once in total, by whichever got the lock
+    expect(results.flat().sort((x, y) => x - y)).toEqual(ALL_VERSIONS); // applied once in total, by whichever got the lock
     const { rows } = await a!.query<{ version: number }>('SELECT version FROM schema_migrations ORDER BY version');
-    expect(rows.map((r) => r.version)).toEqual([1, 2, 3, 4]);
+    expect(rows.map((r) => r.version)).toEqual(ALL_VERSIONS);
     await Promise.all([a!.close(), b!.close(), c!.close()]);
   });
 });

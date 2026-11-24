@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect } from 'react';
 import { EVENTS } from './booking/catalog';
 import { Account } from './site/Account';
 import { Admin } from './site/Admin';
+import { ResetPassword, VerifyEmail } from './site/AuthPages';
 import { CinemaPage } from './site/CinemaPage';
 import { Discover } from './site/Discover';
 import { EventPage } from './site/EventPage';
@@ -60,6 +61,8 @@ export function App() {
     path === '/basketball' ? <Listings key="basketball" kind="basketball" /> :
     path === '/profile' ? <Account /> :
     path === '/admin' ? <Admin /> :
+    path === '/verify-email' ? <VerifyEmail /> :
+    path === '/reset-password' ? <ResetPassword /> :
     cinema ? <CinemaPage key={cinema.id} id={cinema.id!} /> :
     event ? <EventPage id={event.id!} /> :
     <NotFound />;

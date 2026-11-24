@@ -7,7 +7,8 @@ import { PgBookingService } from './pgBookingService';
 import { CITIES } from '../src/discovery/directory';
 import { Accounts } from './platform/accounts';
 import { CatalogStore } from './platform/catalogStore';
-import { movieGluProvider } from './platform/feeds';
+import { fixtureProvider, movieGluProvider } from './platform/feeds';
+import { OutboxMailer } from './platform/mailer';
 
 /** Starts the booking API (and, with --static / SERVE_STATIC=true, the built frontend). See server/config.ts. */
 let config;
@@ -27,13 +28,14 @@ const applied = await migrate(db);
 const service = new PgBookingService(db, { seatIdsFor, priceFor, holdMs: config.holdMinutes * 60_000 });
 const seedReport = await service.seedMockSales();
 
-const feed = config.movieGlu ? movieGluProvider(config.movieGlu) : null;
-const catalog = new CatalogStore(db, feed);
+const feed = config.feedProvider === 'movieglu' ? movieGluProvider(config.movieGlu!)
+  : config.feedProvider === 'fixture' ? fixtureProvider(config.feedFixtureFile!) : null;
+const catalog = new CatalogStore(db, feed, undefined, { cacheHours: config.feedCacheHours });
 await catalog.syncDirectory();
-const accounts = new Accounts(db, catalog, service);
+const accounts = new Accounts(db, catalog, service, undefined, { mailer: new OutboxMailer(db), appOrigin: config.appOrigin, sessionHours: config.sessionHours });
 
 const app = buildApp(service, {
-  platform: { catalog, accounts, feedProviderId: feed?.id ?? null },
+  platform: { catalog, accounts, feedProviderId: feed?.id ?? null, devOutbox: config.devOutbox, catalogDb: db, adminMfaRequired: config.adminMfaRequired },
   logger: { level: config.logLevel },
   rateLimit: { max: config.rateLimitMax, holdsMax: config.rateLimitHoldsMax },
   allowedOrigins: config.allowedOrigins,

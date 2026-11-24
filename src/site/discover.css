@@ -254,3 +254,13 @@
 @media (min-width: 761px) {
   .dx-search__city { display: none; }
 }
+
+/* M4: account states that must not be confused with each other. */
+.dx--narrow { max-width: 640px; }
+.dx-updates .dx-list { padding: 4px 14px; }
+.dx-alert { padding: 10px 0; border-bottom: 1px dashed var(--rule); font-size: 14px; line-height: 1.45; }
+.dx-alert s { color: var(--ink-2); }
+.dx-alert strong { color: var(--stamp); }
+.dx-alert a { margin-left: 4px; }
+.dx-savedrow h3::before { content: 'Saved show'; display: inline-block; margin-right: 8px; padding: 1px 6px; vertical-align: 3px; color: var(--ink); background: var(--paper-2); border: 1px solid var(--ink-2); font: 600 10px/1.5 var(--f-mono); }
+#ax-conf + .dx-note { padding: 10px 12px; border: 2px dashed var(--on-steel-2); }

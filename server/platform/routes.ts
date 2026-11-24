@@ -1,11 +1,17 @@
 import type { FastifyContextConfig, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { httpError, type CatalogStore, type CinemaPatch } from './catalogStore';
-import { SESSION_DAYS, type Accounts, type PublicUser } from './accounts';
+import type { Accounts, PublicUser } from './accounts';
+import { isTestAddress } from './mailer';
 
 export interface PlatformDeps {
   catalog: CatalogStore;
   accounts: Accounts;
   feedProviderId: string | null;
+  /** Development only: lets tests read simulated mail sent to test addresses. */
+  devOutbox?: boolean;
+  catalogDb?: import("../db").Sql;
+  /** Admin routes require a TOTP-verified session. */
+  adminMfaRequired?: boolean;
 }
 
 const COOKIE = 'sv_session';
@@ -56,6 +62,47 @@ export function registerPlatform(app: FastifyInstance, deps: PlatformDeps, limit
     return user;
   };
   const noStore = (reply: FastifyReply) => reply.header('cache-control', 'no-store');
+  /** Saving and importing need a confirmed email address. */
+  const requireVerified = async (req: FastifyRequest): Promise<PublicUser> => {
+    const user = await requireUser(req);
+    if (!user.emailVerified) throw httpError(403, 'VERIFY_EMAIL', 'Confirm your email address first. Check your inbox or resend the link from Profile.');
+    return user;
+  };
+
+  app.get('/api/config', { config }, async () => ({ emailDelivery: accounts.emailDelivery, showtimeProvider: deps.feedProviderId }));
+
+  const tokenBody = { body: { type: 'object', required: ['token'], additionalProperties: false, properties: { token: str(100) } } };
+  app.post<{ Body: { token: string } }>('/api/auth/verify', { config: strict, schema: tokenBody }, async (req) => ({ user: await accounts.verifyEmail(req.body.token) }));
+  app.post('/api/auth/resend-verification', { config: strict }, async (req, reply) => {
+    await accounts.sendVerification(await requireUser(req));
+    return reply.status(204).send();
+  });
+  app.post<{ Body: { email: string } }>('/api/auth/forgot', {
+    config: strict, schema: { body: { type: 'object', required: ['email'], additionalProperties: false, properties: { email: str(254) } } },
+  }, async (req, reply) => {
+    await accounts.requestPasswordReset(req.body.email);
+    return reply.status(204).send();
+  });
+  app.post<{ Body: { token: string; password: string } }>('/api/auth/reset', {
+    config: strict, schema: { body: { type: 'object', required: ['token', 'password'], additionalProperties: false, properties: { token: str(100), password: str(200) } } },
+  }, async (req, reply) => {
+    await accounts.resetPassword(req.body.token, req.body.password);
+    setCookie(req, reply, '', 0);
+    return reply.status(204).send();
+  });
+  app.post('/api/me/alerts/deliver', { config }, async (req, reply) => {
+    noStore(reply);
+    return { alerts: await accounts.deliverAlerts((await requireUser(req)).id) };
+  });
+  if (deps.devOutbox) {
+    app.get<{ Querystring: { to: string } }>('/api/dev/outbox', {
+      schema: { querystring: { type: 'object', required: ['to'], properties: { to: str(254) } } },
+    }, async (req, reply) => {
+      if (!isTestAddress(req.query.to)) throw httpError(403, 'TEST_ADDRESSES_ONLY', 'Only test addresses can be read.');
+      noStore(reply);
+      return (await deps.catalogDb!.query('SELECT kind, subject, body, created_at FROM mail_outbox WHERE to_email = $1 ORDER BY id DESC LIMIT 5', [req.query.to.toLowerCase()])).rows;
+    });
+  }
 
   app.get<{ Querystring: { city: string; date?: string } }>('/api/discovery', {
     config,
@@ -73,12 +120,12 @@ export function registerPlatform(app: FastifyInstance, deps: PlatformDeps, limit
   };
   app.post<{ Body: { email: string; password: string; name?: string } }>('/api/auth/register', { config: strict, schema: credentials }, async (req, reply) => {
     const { user, token } = await accounts.register({ email: req.body.email, password: req.body.password, name: req.body.name ?? '' });
-    setCookie(req, reply, token, SESSION_DAYS * 86_400);
+    setCookie(req, reply, token, accounts.sessionHours * 3600);
     return reply.status(201).send({ user });
   });
   app.post<{ Body: { email: string; password: string } }>('/api/auth/login', { config: strict, schema: credentials }, async (req, reply) => {
     const { user, token } = await accounts.login(req.body.email, req.body.password);
-    setCookie(req, reply, token, SESSION_DAYS * 86_400);
+    setCookie(req, reply, token, accounts.sessionHours * 3600);
     noStore(reply);
     return { user };
   });
@@ -107,7 +154,7 @@ export function registerPlatform(app: FastifyInstance, deps: PlatformDeps, limit
     return accounts.library(await requireUser(req));
   });
   app.put<{ Params: { id: string } }>('/api/me/favourites/:id', { config, schema: { params: idParam('id') } }, async (req, reply) => {
-    await accounts.setFavourite((await requireUser(req)).id, req.params.id, true);
+    await accounts.setFavourite((await requireVerified(req)).id, req.params.id, true);
     return reply.status(204).send();
   });
   app.delete<{ Params: { id: string } }>('/api/me/favourites/:id', { config, schema: { params: idParam('id') } }, async (req, reply) => {
@@ -115,7 +162,7 @@ export function registerPlatform(app: FastifyInstance, deps: PlatformDeps, limit
     return reply.status(204).send();
   });
   app.put<{ Params: { id: string } }>('/api/me/saved/:id', { config, schema: { params: idParam('id') } }, async (req, reply) => {
-    await accounts.saveScreening((await requireUser(req)).id, req.params.id);
+    await accounts.saveScreening((await requireVerified(req)).id, req.params.id);
     return reply.status(204).send();
   });
   app.delete<{ Params: { id: string } }>('/api/me/saved/:id', { config, schema: { params: idParam('id') } }, async (req, reply) => {
@@ -142,7 +189,7 @@ export function registerPlatform(app: FastifyInstance, deps: PlatformDeps, limit
     schema: { body: { type: 'object', required: ['tickets'], additionalProperties: false, properties: {
       tickets: { type: 'array', maxItems: 50, items: { type: 'object', required: ['reference', 'email'], additionalProperties: false, properties: { reference: str(16), email: str(320) } } },
     } } },
-  }, async (req) => ({ results: await accounts.importLocal(await requireUser(req), req.body.tickets) }));
+  }, async (req) => ({ results: await accounts.importLocal(await requireVerified(req), req.body.tickets) }));
 
   app.get('/api/admin/overview', { config }, async (req, reply) => {
     await requireAdmin(req);

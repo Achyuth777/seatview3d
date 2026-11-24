@@ -45,6 +45,7 @@ export interface User {
   homeCity: string | null;
   languages: string[];
   notify: { showChanges: boolean; emailReminders: boolean };
+  emailVerified: boolean;
 }
 
 /**
@@ -210,3 +211,26 @@ export function fmtTime(local: string) {
 }
 const STAMP = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
 export const fmtStamp = (iso: string) => `${STAMP.format(new Date(iso))} IST`;
+
+export interface Alert { id: string; screeningId: string; cinemaId: string; kind: 'changed' | 'removed'; oldStart: string; newStart: string | null; filmTitle: string; cinemaName: string }
+
+/** Alerts are fetched (and so marked delivered) once per page load, then kept for this browser session. */
+const ALERT_KEY = 'seatview.alerts.v1';
+let alerts: Alert[] = (() => { try { return JSON.parse(sessionStorage.getItem(ALERT_KEY) ?? '[]') as Alert[]; } catch { return []; } })();
+const alertListeners = new Set<() => void>();
+let alertsFetchedFor: string | null = null;
+export function useAlerts(): Alert[] {
+  const { user } = useAccount();
+  const list = useSyncExternalStore((cb) => { alertListeners.add(cb); return () => { alertListeners.delete(cb); }; }, () => alerts);
+  useEffect(() => {
+    if (!user?.emailVerified || alertsFetchedFor === user.id) return;
+    alertsFetchedFor = user.id;
+    api<{ alerts: Alert[] }>('/api/me/alerts/deliver', { method: 'POST' }).then((r) => {
+      if (!r.alerts.length) return;
+      alerts = [...r.alerts, ...alerts];
+      try { sessionStorage.setItem(ALERT_KEY, JSON.stringify(alerts)); } catch { /* storage unavailable */ }
+      alertListeners.forEach((l) => l());
+    }).catch(() => { alertsFetchedFor = null; });
+  }, [user?.id, user?.emailVerified]);
+  return user ? list : [];
+}

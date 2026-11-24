@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { CITIES, type Screening } from '../discovery/directory';
 import { Profile } from './Profile';
-import { api, connectionText, fmtDay, fmtTime, reloadLibrary, retryConnection, setAccount, toggleFavourite, toggleSaved, useAccount, useLibrary, type SavedItem, type User } from './platform';
+import { ForgotPassword } from './AuthPages';
+import { api, connectionText, useAlerts, fmtDay, fmtTime, reloadLibrary, retryConnection, setAccount, toggleFavourite, toggleSaved, useAccount, useLibrary, type SavedItem, type User } from './platform';
 import { useProfile } from './profileStore';
 import { Link } from './router';
 import { External } from './showParts';
@@ -23,6 +24,7 @@ export function Account() {
         </p>
       )}
       {status === 'guest' && <AuthForms />}
+      {user && !user.emailVerified && <VerifyBanner email={user.email} />}
       {user && <SignedIn user={user} />}
       <section aria-labelledby="ax-demo">
         <h2 id="ax-demo" className="dx-h">Demo tickets <span className="dx-tag dx-tag--demo">No payment</span></h2>
@@ -33,8 +35,18 @@ export function Account() {
   );
 }
 
+function VerifyBanner({ email }: { email: string }) {
+  const [sent, setSent] = useState(false);
+  return (
+    <p className="dx-feed dx-feed--warn" role="status" data-verify="pending">
+      Confirm your email to save cinemas and shows. We sent a link to {email}.{' '}
+      {sent ? 'A new link is on its way.' : <button type="button" className="dx-link" onClick={() => void api('/api/auth/resend-verification', { method: 'POST' }).then(() => setSent(true))}>Send a new link</button>}
+    </p>
+  );
+}
+
 function AuthForms() {
-  const [mode, setMode] = useState<'in' | 'up'>('in');
+  const [mode, setMode] = useState<'in' | 'up' | 'forgot'>('in');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -42,6 +54,7 @@ function AuthForms() {
   const [busy, setBusy] = useState(false);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (mode === 'forgot') return;
     setBusy(true);
     setError(null);
     try {
@@ -53,6 +66,7 @@ function AuthForms() {
       setBusy(false);
     }
   };
+  if (mode === 'forgot') return <ForgotPassword onBack={() => setMode('in')} />;
   return (
     <form className="dx-form" onSubmit={submit}>
       <h2 className="dx-h">{mode === 'in' ? 'Sign in' : 'Create an account'}</h2>
@@ -64,6 +78,7 @@ function AuthForms() {
       <div className="dx-actions">
         <button className="dx-btn dx-btn--ink" disabled={busy}>{busy ? 'Please wait…' : mode === 'in' ? 'Sign in' : 'Create account'}</button>
         <button type="button" className="dx-link" onClick={() => { setMode(mode === 'in' ? 'up' : 'in'); setError(null); }}>{mode === 'in' ? 'New here? Create an account' : 'Have an account? Sign in'}</button>
+        {mode === 'in' && <button type="button" className="dx-link" onClick={() => setMode('forgot')}>Forgot password?</button>}
       </div>
     </form>
   );
@@ -78,6 +93,7 @@ function SignedIn({ user }: { user: User }) {
   return (
     <>
       <ImportLocal user={user} already={lib?.demoTickets ?? []} />
+      <Updates />
       <section id="saved" aria-labelledby="ax-saved">
         <h2 id="ax-saved" className="dx-h">Saved shows</h2>
         <p className="dx-note">Shows you’re considering. Saving isn’t a booking, and opening a provider’s site doesn’t confirm a purchase.</p>
@@ -190,6 +206,8 @@ function Preferences({ user }: { user: User }) {
       setMsg({ ok: false, text: (err as Error).message });
     }
   };
+  const [emailDelivery, setDelivery] = useState('none');
+  useEffect(() => { api<{ emailDelivery: string }>('/api/config').then((c) => setDelivery(c.emailDelivery)).catch(() => undefined); }, []);
   const signOut = async () => { await api('/api/auth/logout', { method: 'POST' }); setAccount(null); };
   return (
     <section aria-labelledby="ax-pref">
@@ -209,7 +227,8 @@ function Preferences({ user }: { user: User }) {
         </fieldset>
         <fieldset><legend>Notifications</legend>
           <label className="dx-check"><input type="checkbox" checked={notify.showChanges} onChange={(e) => setNotify({ ...notify, showChanges: e.target.checked })} />Show changes to saved shows on this page</label>
-          <label className="dx-check"><input type="checkbox" checked={notify.emailReminders} onChange={(e) => setNotify({ ...notify, emailReminders: e.target.checked })} />Email me reminders (opt-in; email sending isn’t set up yet, so none are sent)</label>
+          <label className="dx-check"><input type="checkbox" checked={notify.emailReminders} disabled={emailDelivery !== 'smtp'} onChange={(e) => setNotify({ ...notify, emailReminders: e.target.checked })} />Email me reminders</label>
+          {emailDelivery !== 'smtp' && <p className="dx-note">Email reminders aren’t available yet, because email sending isn’t connected. Changes to saved shows always appear here.</p>}
         </fieldset>
         {msg && <p className={msg.ok ? 'dx-ok' : 'dx-error'} role="status">{msg.text}</p>}
         <div className="dx-actions">
@@ -218,6 +237,29 @@ function Preferences({ user }: { user: User }) {
           <button type="button" className="dx-link" onClick={() => void signOut()}>Sign out</button>
         </div>
       </form>
+    </section>
+  );
+}
+
+/** Changes to saved shows. Each arrives once from the server and stays visible for this browser session. */
+function Updates() {
+  const alerts = useAlerts();
+  if (!alerts.length) return null;
+  const when = (local: string) => `${fmtDay(local.slice(0, 10))}, ${fmtTime(local)}`;
+  return (
+    <section aria-labelledby="ax-updates" className="dx-updates">
+      <h2 id="ax-updates" className="dx-h">Updates to saved shows</h2>
+      <ul className="dx-list">
+        {alerts.map((a) => (
+          <li key={a.id} className="dx-alert" data-alert={a.kind}>
+            <b>{a.filmTitle}</b> at {a.cinemaName}:{' '}
+            {a.kind === 'changed' && a.newStart
+              ? <>moved from <s>{when(a.oldStart)}</s> to <strong>{when(a.newStart)}</strong>.</>
+              : <>the {when(a.oldStart)} show is no longer listed by the provider.</>}{' '}
+            <Link to={`/cinema/${a.cinemaId}`}>See other shows here</Link>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

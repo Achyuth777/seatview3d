@@ -56,7 +56,7 @@ export function ShowTime({ show, cinema, auditoriums }: { show: Screening; cinem
       ) : (
         <span className="dx-show__go">{body}</span>
       )}
-      {user && (
+      {user?.emailVerified && (
         <button type="button" className="dx-show__save" aria-pressed={saved} aria-label={`${saved ? 'Remove saved show' : 'Save show'}: ${label}`} onClick={() => void toggleSaved(show.id, !saved)}>
           <Star />
         </button>
@@ -95,7 +95,7 @@ export function FilmRow({ group, cinema, auditoriums, showDates }: { group: Film
 export function FavouriteButton({ cinema }: { cinema: Cinema }) {
   const { user } = useAccount();
   const lib = useLibrary();
-  if (!user || cinema.isDemo) return null;
+  if (!user?.emailVerified || cinema.isDemo) return null;
   const on = !!lib?.favourites.some((c) => c.id === cinema.id);
   return (
     <button type="button" className="dx-fav" aria-pressed={on} aria-label={`${on ? 'Remove' : 'Add'} ${cinema.name} ${on ? 'from' : 'to'} favourites`} onClick={() => void toggleFavourite(cinema.id, !on)}>
@@ -113,6 +113,7 @@ export function FeedNote({ feed, cityName, problem }: { feed: FeedInfo; cityName
       </p>
     );
   }
+  if (feed.status === 'expired') return <p className="dx-feed dx-feed--warn" role="status">These times were last confirmed {fmtStamp(feed.lastSuccessAt!)} and may be out of date. Check with the provider.</p>;
   if (feed.status === 'stale') return <p className="dx-feed dx-feed--warn" role="status">Latest refresh failed. Showing times last updated {fmtStamp(feed.lastSuccessAt!)}. Confirm with the provider.</p>;
   if (feed.status === 'live') return <p className="dx-feed">Showtimes updated {fmtStamp(feed.lastSuccessAt!)}</p>;
   return <p className="dx-feed">No live showtime feed for {cityName} yet. Cinemas are verified; check times with the provider.</p>;
