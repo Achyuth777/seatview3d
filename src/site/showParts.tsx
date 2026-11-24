@@ -17,9 +17,9 @@ export function FilmArt({ film }: { film: Film }) {
   );
 }
 
-export function External({ href, children, className = 'dx-btn' }: { href: string; children: React.ReactNode; className?: string }) {
+export function External({ href, children, className = 'dx-btn', restoreKey, onOpen }: { href: string; children: React.ReactNode; className?: string; restoreKey?: string; onOpen?: () => void }) {
   return (
-    <a className={className} href={href} target="_blank" rel="noopener noreferrer">
+    <a className={className} href={href} target="_blank" rel="noopener noreferrer" data-restore-key={restoreKey} onClick={onOpen}>
       {children}
       <svg className="dx-icon" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 9 9 3M4 3h5v5" /></svg>
       <span className="visually-hidden"> (opens in a new tab)</span>

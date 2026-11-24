@@ -17,7 +17,7 @@ export function Shell({ path, children }: { path: string; children: ReactNode })
   const { city, setCity, cities } = useCity();
   const isMovies = path === '/movies';
   return (
-    <div className="site">
+    <div className={isMovies ? 'site site--movies' : 'site'}>
       <a className="skip" href="#main">Skip to content</a>
       <header className="strip">
         <Link to="/" className="strip__brand" aria-label="SeatView home">
