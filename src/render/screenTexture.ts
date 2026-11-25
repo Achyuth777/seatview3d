@@ -59,3 +59,23 @@ function line(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number,
   ctx.lineTo(x2, y2);
   ctx.stroke();
 }
+
+/** A picture filling the screen like a projected frame: scaled to cover, centred, cropped at the edges. */
+export function makePictureTexture(img: ImageBitmap | HTMLImageElement, aspect: number): THREE.Texture {
+  const W = 2048;
+  const H = Math.round(W / aspect);
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const g = c.getContext('2d')!;
+  const iw = img.width, ih = img.height;
+  const scale = Math.max(W / iw, H / ih);
+  const dw = iw * scale, dh = ih * scale;
+  g.fillStyle = '#000';
+  g.fillRect(0, 0, W, H);
+  g.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}

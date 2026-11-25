@@ -14,7 +14,8 @@
     "admin:grant": "tsx server/grantAdmin.ts",
     "typecheck": "tsc --noEmit",
     "migrate:check": "tsx server/migrateCheck.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "build:extension": "node scripts/build-extension.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "0.5.17",
@@ -39,6 +40,7 @@
   },
   "devDependencies": {
     "@playwright/test": "1.65.0",
+    "@types/chrome": "0.3.7",
     "@types/node": "26.6.6",
     "@types/pg": "8.23.1",
     "@types/react": "19.3.0",

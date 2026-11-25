@@ -1,0 +1,32 @@
+/* SeatView panel inside District: the Night Coach Chart palette, compact for a side panel. */
+:root {
+  --steel: #11305c; --steel-2: #17396c; --night: #0b1a30; --on-steel: #eaf0f7; --on-steel-2: #cdd9e8;
+  --paper: #eff1ec; --ink: #16171a; --ink-2: #484c54; --rule: #b5b9b2; --signal: #f2c230; --stamp: #b50d28; --good: #1f7a3d;
+}
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body { background: var(--night); color: var(--on-steel); font: 400 14px/1.45 'Archivo', system-ui, sans-serif; }
+.xv { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+.xv--wait { display: grid; place-items: center; padding: 24px; text-align: center; color: var(--on-steel-2); }
+.xv-head { display: flex; align-items: baseline; gap: 10px; padding: 10px 14px; background: var(--steel); border-bottom: 3px double var(--signal); }
+.xv-brand { font: 800 18px/1 'Big Shoulders Display', sans-serif; color: var(--signal); }
+.xv-film { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 800 18px/1 'Big Shoulders Display', sans-serif; }
+.xv-stage { position: relative; min-height: 0; }
+.xv-stage canvas { position: absolute !important; inset: 0; }
+.xv-badge { position: absolute; top: 8px; left: 8px; margin: 0; padding: 3px 7px; color: var(--signal); background: var(--ink); font: 400 11px/1.4 'Martian Mono', monospace; }
+.xv-seat { position: absolute; left: 8px; bottom: 8px; margin: 0; padding: 6px 10px; color: var(--ink); background: var(--signal); font: 800 18px/1 'Big Shoulders Display', sans-serif; animation: xv-in .16s ease-out; }
+@keyframes xv-in { from { opacity: .4; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .xv-seat { animation: none; } }
+.xv-info { display: grid; gap: 6px; padding: 10px 14px 12px; color: var(--ink); background: var(--paper); }
+.xv-figs { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; margin: 0; }
+.xv-figs > div { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-top: 1px dashed var(--rule); }
+.xv-figs dt { color: var(--ink-2); font-size: 12px; white-space: nowrap; }
+.xv-figs dd { margin: 0; font: 600 11px/1.4 'Martian Mono', monospace; text-align: right; white-space: nowrap; }
+.xv-grade { text-transform: capitalize; }
+.xv-grade[data-grade='good'] { color: var(--good); }
+.xv-grade[data-grade='poor'], .xv-grade[data-grade='unacceptable'] { color: var(--stamp); }
+.xv-hint, .xv-note, .xv-foot { margin: 0; font-size: 12.5px; color: var(--ink-2); }
+.xv-note:empty { display: none; }
+.xv-assume summary { cursor: pointer; font-size: 12.5px; font-weight: 600; }
+.xv-assume ul { margin: 6px 0 4px; padding-left: 18px; font-size: 12px; color: var(--ink-2); }
+.xv-assume p { margin: 0; font-size: 12px; color: var(--ink-2); }
