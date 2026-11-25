@@ -9,6 +9,17 @@
  */
 import type { GridRow, PagePayload, SeatGrid, Slot, ViewerMessage } from './grid';
 
+/** The page's row elements, in the same order as the rows of the last grid read. */
+let rowElements: Element[] = [];
+const letterOf = (li: Element) => [...li.querySelectorAll('div,span')].find((d) => d.children.length === 0 && /^[A-Z]{1,2}$/.test(d.textContent?.trim() ?? ''))?.textContent?.trim();
+/** The seating area's heading just above a row list, e.g. "COUPLE SEAT ELITE : ₹150" → "Couple Seat Elite". */
+function areaOf(li: Element): string | undefined {
+  const text = li.closest('ul')?.parentElement?.previousElementSibling?.textContent?.trim() ?? '';
+  if (!/[:₹]/.test(text)) return undefined;
+  const name = text.split(/[:₹]/)[0]!.trim();
+  return name ? name.toLowerCase().replace(/(^|\s)\S/g, (ch) => ch.toUpperCase()) : undefined;
+}
+
 const SOURCE = 'seatview-district' as const;
 const VIEWER_URL = chrome.runtime.getURL('viewer.html');
 const VIEWER_ORIGIN = new URL(VIEWER_URL).origin;
@@ -51,9 +62,15 @@ function readGrid(): SeatGrid | null {
     return gaps.length ? Math.min(...gaps) : (sample?.width ?? 30);
   })());
   const rows: GridRow[] = [];
+  const kept: Element[] = [];
+  const seen = new Map<string, number>();
   for (const li of rowEls) {
-    const label = [...li.querySelectorAll('div,span')].find((d) => d.children.length === 0 && /^[A-Z]{1,2}$/.test(d.textContent?.trim() ?? ''))?.textContent?.trim();
-    if (!label) continue;
+    const letter = letterOf(li);
+    if (!letter) continue;
+    const count = (seen.get(letter) ?? 0) + 1;
+    seen.set(letter, count);
+    const label = count === 1 ? letter : `${letter}#${count}`;
+    kept.push(li);
     const slots: Slot[] = [...li.querySelector('[class*="seatL"]')!.children].map((slot) => {
       const r = slot.getBoundingClientRect();
       const x = (r.left + r.width / 2) / pitch;
@@ -64,8 +81,9 @@ function readGrid(): SeatGrid | null {
       const number = text && /^\d{1,3}$/.test(text) ? Number(text) : null;
       return { kind: 'seat', x, number, available: number !== null && !/disable|sold|occupied|blocked/i.test(cls) };
     });
-    rows.push({ label, slots });
+    rows.push({ label, slots, area: areaOf(li) });
   }
+  rowElements = kept;
   const screenEl = [...document.querySelectorAll('body *')].find((e) => e.children.length === 0 && /screen this way/i.test(e.textContent ?? ''));
   const firstRowY = rowEls[0]!.getBoundingClientRect().top;
   return { rows, screenAtBottom: screenEl ? screenEl.getBoundingClientRect().top > firstRowY : true };
@@ -104,11 +122,11 @@ function seatOf(target: EventTarget | null): { row: string; number: number } | n
   const el = target instanceof Element ? target.closest('[class*="seatL"] > *') : null;
   const li = el?.closest('li');
   if (!el || !li) return null;
-  const label = [...li.querySelectorAll('div,span')].find((d) => d.children.length === 0 && /^[A-Z]{1,2}$/.test(d.textContent?.trim() ?? ''))?.textContent?.trim();
   const slots = [...el.parentElement!.children];
   const grid = readGrid();
-  const row = grid?.rows.find((r) => r.label === label);
-  if (!label || !row) return null;
+  const row = grid?.rows[rowElements.indexOf(li)];
+  if (!row) return null;
+  const label = row.label;
   const slot = row.slots[slots.indexOf(el)];
   if (!slot || slot.kind !== 'seat') return null;
   // Use the same numbering the viewer uses (filled in for seats without a visible number).

@@ -23,7 +23,7 @@ export async function withExtension(opts: { video?: string } = {}): Promise<Brow
  * (row lists, row letters, seat slots, "available" seats with numbers, blanks, taken seats).
  * Written for tests; it is not District's markup or content.
  */
-export function seatPageHtml(rows: { label: string; pattern: string }[], film = 'Test Film') {
+export function seatPageHtml(rows: { label: string; pattern: string; area?: string }[], film = 'Test Film') {
   const slot = (t: string) =>
     t === '.' ? '<div class="m__seatDiv"><span class="m__blank"></span></div>'
       : t.startsWith('a') ? `<div class="m__seatDiv"><span class="available" data-seat="${t.slice(1)}"><label>${t.slice(1)}</label></span></div>`
@@ -33,11 +33,18 @@ export function seatPageHtml(rows: { label: string; pattern: string }[], film = 
     .m__seatL{display:flex;gap:6px} .m__seatDiv{width:26px;height:26px} .m__seatDiv span{display:grid;place-items:center;width:26px;height:26px;border:1px solid #999;font-size:11px}
     .m__blank{border:0!important} .available{cursor:pointer} .clicked{background:#7c5cff;color:#fff}
   </style></head><body><h1>${film}</h1><p>25 Nov, 08:00 PM at Test Cinema, Chennai</p>
-  <div class="m__rightRow"><ul>${rows.map((r) => `<li><div><div>${r.label}</div></div><div class="m__seatL">${r.pattern.split(' ').map(slot).join('')}</div></li>`).join('')}</ul></div>
+  ${areas(rows).map(([area, rs]) => `${area ? `<div><div>${area} : ₹150</div></div>` : ''}<div class="m__rightRow"><ul>${rs.map((r) => `<li><div class="m__seatName">${r.label}</div><div class="m__seatL">${r.pattern.split(' ').map(slot).join('')}</div></li>`).join('')}</ul></div>`).join('')}
   <div style="margin-top:30px;text-align:center">SCREEN THIS WAY</div>
   <script>document.addEventListener('click',e=>{const s=e.target.closest('.available');if(s){s.classList.toggle('clicked');document.body.dataset.pageClick=s.dataset.seat}})</script>
   </body></html>`;
 }
+
+/** Groups consecutive rows by seating area, as District draws one block per price area. */
+const areas = <R extends { area?: string }>(rows: R[]) => rows.reduce<[string | undefined, R[]][]>((acc, r) => {
+  const last = acc.at(-1);
+  if (last && last[0] === r.area) last[1].push(r); else acc.push([r.area, [r]]);
+  return acc;
+}, []);
 
 export const cinemaPageHtml = (film: string, image: string) => `<!doctype html><html><head><title>Test Cinema</title>
   <script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@type': 'ScreeningEvent', workPresented: { '@type': 'Movie', name: film, image } })}</script>

@@ -6,7 +6,7 @@ import { BASE_VERTICAL_FOV, subjectHalfAngle } from '../../engine/common/viewFit
 import { useReducedMotion } from '../../preview/webgl';
 import { CameraRig, type CameraPose } from '../../render/CameraRig';
 import { CinemaScene } from '../../render/CinemaScene';
-import type { PagePayload, ViewerMessage } from '../grid';
+import { rowName, type PagePayload, type ViewerMessage } from '../grid';
 import { layoutFromGrid } from '../gridLayout';
 
 const SOURCE = 'seatview-district';
@@ -71,7 +71,10 @@ export function Viewer() {
   const pose = layout && seat ? { eye: seat.eye, target: layout.screen.centre } : overview;
   const half = useMemo(() => (layout && seat ? subjectHalfAngle(seat.eye, layout.screen.centre, [{ x: -layout.screen.width / 2, z: 0 }, { x: layout.screen.width / 2, z: 0 }]) : 31), [layout, seat]);
   const noop = useCallback(() => undefined, []);
-  const rowLabel = seat && layout ? layout.rows[seat.rowIndex]!.label : null;
+  const rowKey = seat && layout ? layout.rows[seat.rowIndex]!.label : null;
+  const rowLabel = rowKey ? rowName(rowKey) : null;
+  // Name the seating area when a row letter appears in more than one area.
+  const area = rowKey && page?.grid.rows.some((r) => r.label !== rowKey && rowName(r.label) === rowLabel) ? page.grid.rows.find((r) => r.label === rowKey)?.area : undefined;
 
   if (!page) return <main className="xv xv--wait"><p>Open a District seat map to see the 3D view.</p></main>;
   if (!layout || !pose) return <main className="xv xv--wait"><p>Couldn’t read this seat map. District may have changed its page.</p></main>;
@@ -89,7 +92,7 @@ export function Viewer() {
           <CameraRig pose={pose} locked={!!seat} animate={!reduced} subjectHalfAngle={half} restKey={viewId ?? 'overview'} onRest={onRest} />
         </Canvas>
         <p className="xv-badge">Illustrative: real seat map, estimated sizes</p>
-        {seat && <p className="xv-seat">{hover ? 'Preview' : 'Your seat'} · Row {rowLabel} · Seat {seat.number}</p>}
+        {seat && <p className="xv-seat">{hover ? 'Preview' : 'Your seat'} · {area ? `${area} · ` : ''}Row {rowLabel} · Seat {seat.number}</p>}
       </section>
       <section className="xv-info">
         {seat && metrics ? (

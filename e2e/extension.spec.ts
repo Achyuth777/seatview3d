@@ -17,6 +17,12 @@ const ROWS = [
   { label: 'C', pattern: 'a23 a22 x x x x x . . . a16 x x x x x x x x . . . x x x x x x x' },
   { label: 'D', pattern: '. . . . . . . . . . . . x x a5 a4 x . . . . . . . . . .' },
 ];
+// Two seating areas that both start at row A, as on Kamala Cinemas' couple-seat layout (25 Nov 2026).
+const AREA_ROWS = [
+  { label: 'A', pattern: 'a1 a2 . a3 a4', area: 'COUPLE SEAT LOUNGE' },
+  { label: 'B', pattern: 'a1 a2 . a3 a4', area: 'COUPLE SEAT LOUNGE' },
+  { label: 'A', pattern: 'x a2 a3 x . a5 a6', area: 'ELITE' },
+];
 
 let context: BrowserContext;
 test.beforeAll(async ({ browserName }, info) => {
@@ -24,7 +30,7 @@ test.beforeAll(async ({ browserName }, info) => {
   context = await withExtension();
   await context.route('https://www.district.in/movies/**', (r) => {
     const url = r.request().url();
-    const body = url.includes('broken') ? '<h1>Changed page</h1>' : url.includes('/seat-layout/') ? seatPageHtml(ROWS) : cinemaPageHtml('Test Film', BANNER);
+    const body = url.includes('broken') ? '<h1>Changed page</h1>' : url.includes('/seat-layout/areas') ? seatPageHtml(AREA_ROWS) : url.includes('/seat-layout/') ? seatPageHtml(ROWS) : cinemaPageHtml('Test Film', BANNER);
     return r.fulfill({ contentType: 'text/html', body });
   });
   await context.route('https://cdn.district.in/**', (r) => r.fulfill({ contentType: 'image/png', body: testBannerPng() }));
@@ -76,6 +82,19 @@ test('switch on: the panel rebuilds the hall from the seat map, shows the banner
   // A taken seat (no number on the page) still previews, numbered as the page numbers it.
   await page.locator('li').nth(1).locator('.m__seatDiv').nth(3).hover();
   await expect(main).toHaveAttribute('data-view-seat', 'B20');
+  await page.close();
+});
+
+test('a row letter used in two seating areas previews the right row and names the area', async () => {
+  const page = await context.newPage();
+  await page.goto('https://www.district.in/movies/seat-layout/areas?encsessionid=5059-1');
+  const panel = page.frameLocator('iframe[title="SeatView 3D seat view"]');
+  await expect(panel.locator('main')).toHaveAttribute('data-rows', '3', { timeout: 20_000 }); // switch is still on from the first test
+  await page.locator('li').nth(2).locator('[data-seat="5"]').hover();
+  await expect(panel.locator('main')).toHaveAttribute('data-view-seat', 'A#25');
+  await expect(panel.locator('.xv-seat')).toHaveText('Preview · Elite · Row A · Seat 5');
+  await page.locator('li').nth(0).locator('[data-seat="3"]').hover();
+  await expect(panel.locator('.xv-seat')).toHaveText('Preview · Couple Seat Lounge · Row A · Seat 3');
   await page.close();
 });
 

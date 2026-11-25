@@ -3,7 +3,13 @@
  * x is the slot's horizontal centre in seat widths, measured on the page and centred on the map.
  */
 export type Slot = { kind: 'gap'; x: number } | { kind: 'seat'; x: number; number: number | null; available: boolean };
-export interface GridRow { label: string; slots: Slot[] }
+/**
+ * label is unique within the map. When a letter repeats in another seating area (District restarts
+ * at A per price block), later rows get "#2", "#3"...; rowName() gives the letter to show.
+ * area is the seating area's name from the page, when it has one.
+ */
+export interface GridRow { label: string; slots: Slot[]; area?: string }
+export const rowName = (label: string) => label.replace(/#\d+$/, '');
 export interface SeatGrid {
   /** Rows in page order (top to bottom). */
   rows: GridRow[];
@@ -39,7 +45,7 @@ export function numberRow(row: GridRow): GridRow {
   const agrees = (m: Map<number, number>) => known.every(([i, num]) => m.get(i) === num);
   const order = !known.length || agrees(rtl) ? rtl : agrees(ltr) ? ltr : rtl;
   return {
-    label: row.label,
+    ...row,
     slots: row.slots.map((s, i) => (s.kind === 'seat' ? { ...s, number: s.number ?? order.get(i)! } : s)),
   };
 }
