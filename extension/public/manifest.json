@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "SeatView 3D for District (private demo)",
+  "short_name": "SeatView 3D",
+  "version": "0.1.0",
+  "description": "Private demo: a 3D view from your seat on District's seat map. Not affiliated with District. Not for publication.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://cdn.district.in/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://www.district.in/movies/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["viewer.html", "assets/*"],
+      "matches": ["https://www.district.in/*"]
+    }
+  ],
+  "icons": { "128": "icon-128.png" },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; img-src 'self' blob: data:; connect-src 'self' https://cdn.district.in"
+  }
+}

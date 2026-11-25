@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import type { CinemaLayout } from '../engine/cinema/layout';
 import type { SeatState } from '../booking/types';
 import { seatColor } from './seatColors';
-import { makeScreenTexture } from './screenTexture';
+import { makePictureTexture, makeScreenTexture } from './screenTexture';
 
 const SEAT_COLOR = new THREE.Color('#8b2a2a');
 const COMPARE_COLOR = new THREE.Color('#eaf0f7');
@@ -20,19 +20,21 @@ interface Props {
   compareId?: string | null;
   states: Map<string, SeatState>;
   onSelect: (seatId: string) => void;
+  /** A picture for the screen (e.g. the film's banner). Without one, the measured grid is shown. */
+  screenImage?: ImageBitmap | HTMLImageElement | null;
 }
 
-export function CinemaScene({ layout, selectedId, compareId = null, states, onSelect }: Props) {
+export function CinemaScene({ layout, selectedId, compareId = null, states, onSelect, screenImage = null }: Props) {
   const { screen, rows, seats, room, params } = layout;
 
   const screenTex = useMemo(
-    () =>
+    () => screenImage ? makePictureTexture(screenImage, screen.width / screen.height) :
       makeScreenTexture(
         screen.width,
         screen.height,
         `${screen.width.toFixed(1)} m × ${screen.height.toFixed(2)} m · ${params.screen.aspect}:1`,
       ),
-    [screen.width, screen.height, params.screen.aspect],
+    [screen.width, screen.height, params.screen.aspect, screenImage],
   );
 
   const cushionRef = useRef<THREE.InstancedMesh>(null);

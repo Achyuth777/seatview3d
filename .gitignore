@@ -15,3 +15,7 @@ data
 test-results
 playwright-report
 .e2e-data
+extension-dist
+# Demo recordings of the real District site (their page and film artwork): kept local
+docs/extension/demo.webm
+docs/extension/live-*.png
