@@ -64,3 +64,31 @@ export function testBannerPng(): Buffer {
   const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(W, 0); ihdr.writeUInt32BE(H, 4); ihdr[8] = 8; ihdr[9] = 2;
   return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
 }
+
+/**
+ * A stand-in for PVR INOX's seat page, with the structure the reader uses (screen at the top, area
+ * headings, a seat table with row letters, hidden gap cells, free and taken seats, a summary with
+ * the film and poster). Written for tests; it is not PVR's markup or content.
+ * Pattern tokens: "." gap, "aN" free seat N, "xN" taken seat N.
+ */
+export function pvrSeatTableHtml(areas: { name: string; rows: { label: string; pattern: string }[] }[], poster: string) {
+  const cell = (t: string) =>
+    t === '.' ? '<td class="seats-col"><span class="seat_hidden">X</span></td>'
+      : t.startsWith('a') ? `<td class="seats-col"><span id="AR|R:${t.slice(1)}" class="seat-current-pvr" data-seat="${t.slice(1)}">${t.slice(1)}</span></td>`
+        : `<td class="seats-col"><span class="seat-disable">${t.slice(1)}</span></td>`;
+  return `<div class="screen"><h6>Screen</h6></div>
+  <div class="all-seats">${areas.map((a) => `<div class="seat-category-heading"><span class="seat-category-name">${a.name}</span><span class="seat-category-price">(100 + GST)</span></div>
+    <table><tbody>${a.rows.map((r) => `<tr class="seats-row"><td class="seats-col"><span class="seat-row-no area">${r.label}</span></td>${r.pattern.split(' ').map(cell).join('')}<td class="seats-col"><span class="seat-row-no area">${r.label}</span></td></tr>`).join('')}</tbody></table>`).join('')}</div>
+  <div class="summary-movies-photo"><img src="${poster}" alt=""></div>
+  <div class="summary-movies-content"><h5>TEST FILM</h5><p>UA 16+</p><p>Thu, 26 Nov, 10:55 PM - 1:08 AM</p><p>Test Cinema Chennai</p></div>`;
+}
+
+/** PVR's site changes pages without reloading: this shell swaps in the seat page on a button press. */
+export const pvrShellHtml = (seatPage: string) => `<!doctype html><html><head><title>PVR Cinemas</title><style>
+  body{font-family:sans-serif;margin:40px} table{border-collapse:separate;border-spacing:6px} .seats-col span{display:inline-grid;place-items:center;width:26px;height:26px;border:1px solid #999;font-size:11px}
+  .seat_hidden{visibility:hidden} .seat-disable{background:#ddd} .screen{text-align:center;margin-bottom:30px} .summary-movies-photo img{width:80px}
+  </style></head><body><div id="app"><h1>Showtimes</h1><button id="go">10:55 PM</button></div>
+  <script>
+    document.getElementById('go').onclick = () => { history.pushState({}, '', '/seatlayout/test=='); document.getElementById('app').innerHTML = ${JSON.stringify(seatPage)}; };
+    document.addEventListener('click', e => { const s = e.target.closest('.seat-current-pvr'); if (s) document.body.dataset.pageClick = s.dataset.seat; });
+  </script></body></html>`;

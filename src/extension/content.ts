@@ -1,34 +1,29 @@
 /// <reference types="chrome" />
 /**
- * Content script for District (district.in). Private demo; not published.
- * - On any District movies page: remembers each film's landscape banner from the page's own
+ * Content script for District and PVR INOX. Private demo; not published.
+ * - On District movies pages: remembers each film's landscape banner from the page's own
  *   structured data (schema.org Movie.image), so the seat page can show it on the 3D screen.
- * - On the seat-layout page: reads the seat map, adds an on/off switch and a side panel with the
+ * - On a seat-selection page: reads the seat map, adds an on/off switch and a side panel with the
  *   3D view. Hovering a seat previews its view; clicking selects it. The page's own booking flow
- *   is never changed, automated or intercepted: the visitor books and pays on District.
+ *   is never changed, automated or intercepted: the visitor books and pays on the site.
  */
 import type { GridRow, PagePayload, SeatGrid, Slot, ViewerMessage } from './grid';
-
-/** The page's row elements, in the same order as the rows of the last grid read. */
-let rowElements: Element[] = [];
-const letterOf = (li: Element) => [...li.querySelectorAll('div,span')].find((d) => d.children.length === 0 && /^[A-Z]{1,2}$/.test(d.textContent?.trim() ?? ''))?.textContent?.trim();
-/** The seating area's heading just above a row list, e.g. "COUPLE SEAT ELITE : ₹150" → "Couple Seat Elite". */
-function areaOf(li: Element): string | undefined {
-  const text = li.closest('ul')?.parentElement?.previousElementSibling?.textContent?.trim() ?? '';
-  if (!/[:₹]/.test(text)) return undefined;
-  const name = text.split(/[:₹]/)[0]!.trim();
-  return name ? name.toLowerCase().replace(/(^|\s)\S/g, (ch) => ch.toUpperCase()) : undefined;
-}
+import { district, siteForPage, type SiteReader } from './sites';
 
 const SOURCE = 'seatview-district' as const;
 const VIEWER_URL = chrome.runtime.getURL('viewer.html');
 const VIEWER_ORIGIN = new URL(VIEWER_URL).origin;
-const ALLOWED_IMAGE = /^https:\/\/cdn\.district\.in\//;
 
 const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
 
+/** The reader for the page that's open (null when it isn't a seat page). */
+let site: SiteReader | null = null;
+/** The page's row elements, in the same order as the rows of the last grid read. */
+let rowElements: Element[] = [];
+
 /** Film title → banner image, from structured data District publishes for search engines. */
 async function rememberBanners() {
+  if (location.hostname !== 'www.district.in') return;
   const found: Record<string, string> = {};
   for (const el of document.querySelectorAll('script[type="application/ld+json"]')) {
     try {
@@ -36,7 +31,7 @@ async function rememberBanners() {
         if (Array.isArray(o)) o.forEach(walk);
         else if (o && typeof o === 'object') {
           const r = o as Record<string, unknown>;
-          if (r['@type'] === 'Movie' && typeof r.name === 'string' && typeof r.image === 'string' && ALLOWED_IMAGE.test(r.image)) found[norm(r.name)] = r.image;
+          if (r['@type'] === 'Movie' && typeof r.name === 'string' && typeof r.image === 'string' && district.imageHost.test(r.image)) found[norm(r.name)] = r.image;
           Object.values(r).forEach(walk);
         }
       };
@@ -51,54 +46,53 @@ async function rememberBanners() {
   await chrome.storage.local.set({ banners: merged });
 }
 
-/** Reads the seat map. Relies only on row lists, row letters, seat labels and slot positions. */
+/** Reads the seat map. Relies only on row elements, row letters, seat labels and slot positions. */
 function readGrid(): SeatGrid | null {
-  const rowEls = [...document.querySelectorAll('ul > li')].filter((li) => li.querySelector('[class*="seatL"]'));
+  if (!site) return null;
+  const s = site;
+  const rowEls = s.rowElements();
   if (!rowEls.length) return null;
-  const sample = rowEls[0]!.querySelector('[class*="seatL"]')!.children[0]?.getBoundingClientRect();
+  const firstSlots = s.slots(rowEls[0]!);
   const pitch = Math.max(1, (() => {
-    const kids = [...rowEls[0]!.querySelector('[class*="seatL"]')!.children].map((c) => c.getBoundingClientRect().left);
-    const gaps = kids.slice(1).map((x, i) => x - kids[i]!).filter((d) => d > 2);
-    return gaps.length ? Math.min(...gaps) : (sample?.width ?? 30);
+    const xs = firstSlots.map((c) => c.getBoundingClientRect().left);
+    const gaps = xs.slice(1).map((x, k) => x - xs[k]!).filter((d) => d > 2);
+    return gaps.length ? Math.min(...gaps) : (firstSlots[0]?.getBoundingClientRect().width ?? 30);
   })());
   const rows: GridRow[] = [];
   const kept: Element[] = [];
   const seen = new Map<string, number>();
-  for (const li of rowEls) {
-    const letter = letterOf(li);
+  for (const el of rowEls) {
+    const letter = s.rowLetter(el);
     if (!letter) continue;
-    const count = (seen.get(letter) ?? 0) + 1;
-    seen.set(letter, count);
-    const label = count === 1 ? letter : `${letter}#${count}`;
-    kept.push(li);
-    const slots: Slot[] = [...li.querySelector('[class*="seatL"]')!.children].map((slot) => {
+    const slots: Slot[] = s.slots(el).map((slot) => {
       const r = slot.getBoundingClientRect();
       const x = (r.left + r.width / 2) / pitch;
-      const span = slot.querySelector('span');
-      const cls = span?.className.toString() ?? '';
-      if (!span || /blank/i.test(cls)) return { kind: 'gap', x };
-      const text = span.querySelector('label')?.textContent?.trim();
-      const number = text && /^\d{1,3}$/.test(text) ? Number(text) : null;
-      return { kind: 'seat', x, number, available: number !== null && !/disable|sold|occupied|blocked/i.test(cls) };
+      const read = s.readSlot(slot);
+      return read.kind === 'gap' ? { kind: 'gap', x } : { kind: 'seat', x, number: read.number, available: read.available };
     });
-    rows.push({ label, slots, area: areaOf(li) });
+    if (!slots.some((x) => x.kind === 'seat')) continue;
+    const count = (seen.get(letter) ?? 0) + 1;
+    seen.set(letter, count);
+    kept.push(el);
+    rows.push({ label: count === 1 ? letter : `${letter}#${count}`, slots, area: s.area(el) });
   }
+  if (!rows.length) return null;
   rowElements = kept;
-  const screenEl = [...document.querySelectorAll('body *')].find((e) => e.children.length === 0 && /screen this way/i.test(e.textContent ?? ''));
-  const firstRowY = rowEls[0]!.getBoundingClientRect().top;
+  const screenEl = s.screenElement();
+  const firstRowY = kept[0]!.getBoundingClientRect().top;
   return { rows, screenAtBottom: screenEl ? screenEl.getBoundingClientRect().top > firstRowY : true };
 }
 
 async function readPage(): Promise<PagePayload | null> {
   const grid = readGrid();
-  if (!grid) return null;
-  const film = document.querySelector('h1')?.textContent?.trim() ?? null;
-  const showLine = [...document.querySelectorAll('h2,h3,p,div')].find((e) => e.children.length === 0 && / at .+,/.test(e.textContent ?? '') && /\d{1,2}:\d{2}/.test(e.textContent ?? ''))?.textContent?.trim() ?? null;
-  const session = new URL(location.href).searchParams.get('encsessionid');
+  if (!grid || !site) return null;
+  const film = site.film();
+  const showLine = site.showLine();
+  const session = site === district ? new URL(location.href).searchParams.get('encsessionid') : null;
   const { banners = {} } = (await chrome.storage.local.get('banners')) as { banners?: Record<string, string> };
-  const posterUrl = film ? banners[norm(film)] ?? null : null;
+  const posterUrl = site.pagePoster() ?? (film ? banners[norm(film)] ?? null : null);
   const imax = /imax/i.test(document.querySelector('[class*="active"], [aria-selected="true"], [aria-pressed="true"]')?.textContent ?? '') || /imax/i.test(showLine ?? '');
-  return { grid, film, showLine, cinemaId: session ? `CD${session.split('-')[0]}` : null, posterUrl, imax };
+  return { site: site.name, grid, film, showLine, cinemaId: session ? `CD${session.split('-')[0]}` : null, posterUrl, imax };
 }
 
 // ---- Panel and switch ----
@@ -119,13 +113,14 @@ async function pushPage(force = false) {
 }
 
 function seatOf(target: EventTarget | null): { row: string; number: number } | null {
-  const el = target instanceof Element ? target.closest('[class*="seatL"] > *') : null;
-  const li = el?.closest('li');
-  if (!el || !li) return null;
-  const slots = [...el.parentElement!.children];
+  if (!site || !(target instanceof Element)) return null;
+  const el = site.slotAt(target);
+  if (!el) return null;
   const grid = readGrid();
-  const row = grid?.rows[rowElements.indexOf(li)];
+  const index = rowElements.findIndex((r) => r.contains(el));
+  const row = grid?.rows[index];
   if (!row) return null;
+  const slots = site.slots(rowElements[index]!);
   const label = row.label;
   const slot = row.slots[slots.indexOf(el)];
   if (!slot || slot.kind !== 'seat') return null;
@@ -206,10 +201,24 @@ window.addEventListener('message', (e) => {
 });
 
 void rememberBanners();
-if (/^\/movies\/seat-layout\//.test(location.pathname)) {
-  const start = () => { if (readGrid()) { mountUi(); watchSeats(); return true; } return false; };
-  if (!start()) {
-    const obs = new MutationObserver(() => { if (start()) obs.disconnect(); });
-    obs.observe(document.documentElement, { subtree: true, childList: true });
-  }
+let watching = false;
+let syncTimer = 0;
+function unmountUi() {
+  document.getElementById('seatview-district-root')?.remove();
+  document.documentElement.style.marginRight = '';
+  frame = null;
+  ready = false;
+  lastSignature = '';
 }
+/** Mounts the switch on seat pages and removes it elsewhere; re-checked as single-page sites navigate. */
+function sync() {
+  site = siteForPage();
+  const mounted = !!document.getElementById('seatview-district-root');
+  if (site && readGrid()) {
+    if (!mounted) mountUi();
+    if (!watching) { watchSeats(); watching = true; }
+  } else if (!site && mounted) unmountUi();
+}
+sync();
+new MutationObserver(() => { window.clearTimeout(syncTimer); syncTimer = window.setTimeout(sync, 300); })
+  .observe(document.documentElement, { subtree: true, childList: true });

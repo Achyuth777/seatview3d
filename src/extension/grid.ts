@@ -19,6 +19,8 @@ export interface SeatGrid {
 
 /** What the content script sends to the viewer. */
 export interface PagePayload {
+  /** The booking site's name, e.g. "District" or "PVR INOX". */
+  site: string;
   grid: SeatGrid;
   film: string | null;
   showLine: string | null;
