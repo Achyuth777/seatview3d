@@ -6,14 +6,17 @@ import { BASE_VERTICAL_FOV, subjectHalfAngle } from '../../engine/common/viewFit
 import { useReducedMotion } from '../../preview/webgl';
 import { CameraRig, type CameraPose } from '../../render/CameraRig';
 import { CinemaScene } from '../../render/CinemaScene';
-import type { PagePayload, ViewerMessage } from '../grid';
+import { rowName, type PagePayload, type ViewerMessage } from '../grid';
 import { layoutFromGrid } from '../gridLayout';
 
 const SOURCE = 'seatview-district';
-const PAGE_ORIGIN = 'https://www.district.in';
-const ALLOWED_IMAGE = /^https:\/\/cdn\.district\.in\//;
+/** The booking sites the panel may be embedded in (matches the manifest). */
+const PAGE_ORIGINS = ['https://www.district.in', 'https://www.pvrcinemas.com'];
+/** The site embedding this panel, when it is one of the allowed ones. */
+const PAGE_ORIGIN = PAGE_ORIGINS.find((o) => o === location.ancestorOrigins?.[0]) ?? null;
+const ALLOWED_IMAGE = /^https:\/\/(cdn\.district\.in|[a-z0-9-]+\.pvrcinemas\.com)\//;
 
-/** Loads the film banner. The extension's host permission lets it read District's image CDN. */
+/** Loads the film image. The extension's host permissions let it read these sites' image hosts. */
 function useBanner(url: string | null) {
   const [img, setImg] = useState<ImageBitmap | null>(null);
   useEffect(() => {
@@ -44,6 +47,7 @@ export function Viewer() {
         else { setSelected(`${e.data.row}${e.data.number}`); setHover(null); }
       }
     };
+    if (!PAGE_ORIGIN) return;
     window.addEventListener('message', onMessage);
     window.parent.postMessage({ source: SOURCE, type: 'ready' }, PAGE_ORIGIN);
     return () => window.removeEventListener('message', onMessage);
@@ -71,10 +75,13 @@ export function Viewer() {
   const pose = layout && seat ? { eye: seat.eye, target: layout.screen.centre } : overview;
   const half = useMemo(() => (layout && seat ? subjectHalfAngle(seat.eye, layout.screen.centre, [{ x: -layout.screen.width / 2, z: 0 }, { x: layout.screen.width / 2, z: 0 }]) : 31), [layout, seat]);
   const noop = useCallback(() => undefined, []);
-  const rowLabel = seat && layout ? layout.rows[seat.rowIndex]!.label : null;
+  const rowKey = seat && layout ? layout.rows[seat.rowIndex]!.label : null;
+  const rowLabel = rowKey ? rowName(rowKey) : null;
+  // Name the seating area when a row letter appears in more than one area.
+  const area = rowKey && page?.grid.rows.some((r) => r.label !== rowKey && rowName(r.label) === rowLabel) ? page.grid.rows.find((r) => r.label === rowKey)?.area : undefined;
 
-  if (!page) return <main className="xv xv--wait"><p>Open a District seat map to see the 3D view.</p></main>;
-  if (!layout || !pose) return <main className="xv xv--wait"><p>Couldn’t read this seat map. District may have changed its page.</p></main>;
+  if (!page) return <main className="xv xv--wait"><p>Open a seat map on District or PVR INOX to see the 3D view.</p></main>;
+  if (!layout || !pose) return <main className="xv xv--wait"><p>Couldn’t read this seat map. {page.site} may have changed its page.</p></main>;
 
   return (
     <main className="xv" data-view-seat={viewId ?? 'overview'} data-banner={banner ? 'loaded' : 'none'} data-rows={layout.rows.length} data-camera-seat={restAt ?? undefined}>
@@ -89,7 +96,7 @@ export function Viewer() {
           <CameraRig pose={pose} locked={!!seat} animate={!reduced} subjectHalfAngle={half} restKey={viewId ?? 'overview'} onRest={onRest} />
         </Canvas>
         <p className="xv-badge">Illustrative: real seat map, estimated sizes</p>
-        {seat && <p className="xv-seat">{hover ? 'Preview' : 'Your seat'} · Row {rowLabel} · Seat {seat.number}</p>}
+        {seat && <p className="xv-seat">{hover ? 'Preview' : 'Your seat'} · {area ? `${area} · ` : ''}Row {rowLabel} · Seat {seat.number}</p>}
       </section>
       <section className="xv-info">
         {seat && metrics ? (
@@ -100,15 +107,15 @@ export function Viewer() {
             <div><dt>Overall</dt><dd className="xv-grade" data-grade={metrics.grades.overall}>{metrics.grades.overall}</dd></div>
           </dl>
         ) : (
-          <p className="xv-hint">Point at any seat on District’s map to preview its view. Click to keep it.</p>
+          <p className="xv-hint">Point at any seat on {page.site}’s map to preview its view. Click to keep it.</p>
         )}
         <p className="xv-note">{page.showLine ?? ''}</p>
         <details className="xv-assume">
           <summary>How this view is made</summary>
           <ul>{built!.assumptions.map((a) => <li key={a}>{a}</li>)}</ul>
-          <p>{banner ? 'The screen shows the film’s banner from District.' : 'Open the cinema or film page on District first to show the film’s banner on the screen.'}</p>
+          <p>{banner ? `The screen shows the film’s image from ${page.site}.` : page.site === 'District' ? 'Open the cinema or film page on District first to show the film’s banner on the screen.' : 'This page didn’t show a film image, so the screen shows a grid.'}</p>
         </details>
-        <p className="xv-foot">Book and pay on District as usual. SeatView only shows the view.</p>
+        <p className="xv-foot">Book and pay on {page.site} as usual. SeatView only shows the view.</p>
       </section>
     </main>
   );

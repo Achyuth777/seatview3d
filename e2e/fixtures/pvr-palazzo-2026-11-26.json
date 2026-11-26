@@ -1,0 +1,21 @@
+{
+  "note": "Seat layout read from PVR Palazzo (Chennai) seat page on 26 Nov 2026, Hail Mary 10:55 PM: '.' gap, aN free seat N, xN taken seat N. Screen above row L.",
+  "areas": [
+    { "name": "BUDGET", "rows": [
+      { "label": "L", "pattern": ". . . . . . . . . . . . . a1 a2 a3 a4 a5 . . . . . . . . . . . ." },
+      { "label": "K", "pattern": ". . x1 x2 x3 a4 x5 x6 . . . x7 x8 x9 x10 x11 x12 x13 x14 x15 . . . x16 x17 x18 a19 a20 a21 x22" }
+    ] },
+    { "name": "ELITE", "rows": [
+      { "label": "J", "pattern": ". . a1 a2 a3 a4 a5 a6 . . . a7 a8 a9 a10 a11 a12 a13 a14 a15 . . . a16 a17 a18 . . . ." },
+      { "label": "I", "pattern": ". a1 a2 a3 a4 a5 a6 a7 . . . a8 a9 a10 a11 a12 a13 a14 a15 a16 . . . a17 a18 a19 . . . ." },
+      { "label": "H", "pattern": ". a1 a2 a3 a4 a5 a6 a7 . . . a8 a9 a10 a11 x12 a13 a14 a15 a16 . . . a17 a18 a19 . . . ." },
+      { "label": "G", "pattern": ". a1 a2 a3 a4 a5 a6 a7 . . . x8 a9 a10 x11 x12 a13 x14 x15 x16 . . . a17 a18 a19 . . . ." },
+      { "label": "F", "pattern": ". a1 a2 a3 a4 a5 a6 a7 . . . a8 x9 x10 x11 x12 x13 x14 a15 a16 . . . a17 a18 a19 a20 a21 x22 x23" },
+      { "label": "E", "pattern": ". . a1 a2 a3 a4 a5 a6 . . . a7 a8 a9 x10 x11 x12 x13 a14 a15 . . . a16 a17 a18 a19 a20 a21 ." },
+      { "label": "D", "pattern": ". a1 a2 a3 a4 a5 a6 a7 . . . a8 a9 a10 x11 x12 x13 x14 x15 x16 . . . a17 a18 a19 a20 a21 a22 a23" },
+      { "label": "C", "pattern": ". a1 a2 a3 a4 a5 a6 x7 . . . a8 a9 a10 a11 x12 x13 x14 x15 x16 . . . x17 a18 a19 a20 a21 a22 a23" },
+      { "label": "B", "pattern": ". a1 a2 a3 a4 a5 a6 a7 . . . a8 x9 a10 x11 x12 x13 x14 x15 x16 . . . x17 x18 x19 a20 a21 a22 a23" },
+      { "label": "A", "pattern": ". . x1 x2 x3 x4 x5 x6 x7 x8 . . . x9 a10 x11 a12 a13 a14 . . a15 x16 a17 a18 a19 a20 a21 a22 ." }
+    ] }
+  ]
+}

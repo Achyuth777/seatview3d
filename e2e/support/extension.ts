@@ -23,7 +23,7 @@ export async function withExtension(opts: { video?: string } = {}): Promise<Brow
  * (row lists, row letters, seat slots, "available" seats with numbers, blanks, taken seats).
  * Written for tests; it is not District's markup or content.
  */
-export function seatPageHtml(rows: { label: string; pattern: string }[], film = 'Test Film') {
+export function seatPageHtml(rows: { label: string; pattern: string; area?: string }[], film = 'Test Film') {
   const slot = (t: string) =>
     t === '.' ? '<div class="m__seatDiv"><span class="m__blank"></span></div>'
       : t.startsWith('a') ? `<div class="m__seatDiv"><span class="available" data-seat="${t.slice(1)}"><label>${t.slice(1)}</label></span></div>`
@@ -33,11 +33,18 @@ export function seatPageHtml(rows: { label: string; pattern: string }[], film = 
     .m__seatL{display:flex;gap:6px} .m__seatDiv{width:26px;height:26px} .m__seatDiv span{display:grid;place-items:center;width:26px;height:26px;border:1px solid #999;font-size:11px}
     .m__blank{border:0!important} .available{cursor:pointer} .clicked{background:#7c5cff;color:#fff}
   </style></head><body><h1>${film}</h1><p>25 Nov, 08:00 PM at Test Cinema, Chennai</p>
-  <div class="m__rightRow"><ul>${rows.map((r) => `<li><div><div>${r.label}</div></div><div class="m__seatL">${r.pattern.split(' ').map(slot).join('')}</div></li>`).join('')}</ul></div>
+  ${areas(rows).map(([area, rs]) => `${area ? `<div><div>${area} : ₹150</div></div>` : ''}<div class="m__rightRow"><ul>${rs.map((r) => `<li><div class="m__seatName">${r.label}</div><div class="m__seatL">${r.pattern.split(' ').map(slot).join('')}</div></li>`).join('')}</ul></div>`).join('')}
   <div style="margin-top:30px;text-align:center">SCREEN THIS WAY</div>
   <script>document.addEventListener('click',e=>{const s=e.target.closest('.available');if(s){s.classList.toggle('clicked');document.body.dataset.pageClick=s.dataset.seat}})</script>
   </body></html>`;
 }
+
+/** Groups consecutive rows by seating area, as District draws one block per price area. */
+const areas = <R extends { area?: string }>(rows: R[]) => rows.reduce<[string | undefined, R[]][]>((acc, r) => {
+  const last = acc.at(-1);
+  if (last && last[0] === r.area) last[1].push(r); else acc.push([r.area, [r]]);
+  return acc;
+}, []);
 
 export const cinemaPageHtml = (film: string, image: string) => `<!doctype html><html><head><title>Test Cinema</title>
   <script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@type': 'ScreeningEvent', workPresented: { '@type': 'Movie', name: film, image } })}</script>
@@ -57,3 +64,31 @@ export function testBannerPng(): Buffer {
   const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(W, 0); ihdr.writeUInt32BE(H, 4); ihdr[8] = 8; ihdr[9] = 2;
   return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
 }
+
+/**
+ * A stand-in for PVR INOX's seat page, with the structure the reader uses (screen at the top, area
+ * headings, a seat table with row letters, hidden gap cells, free and taken seats, a summary with
+ * the film and poster). Written for tests; it is not PVR's markup or content.
+ * Pattern tokens: "." gap, "aN" free seat N, "xN" taken seat N.
+ */
+export function pvrSeatTableHtml(areas: { name: string; rows: { label: string; pattern: string }[] }[], poster: string) {
+  const cell = (t: string) =>
+    t === '.' ? '<td class="seats-col"><span class="seat_hidden">X</span></td>'
+      : t.startsWith('a') ? `<td class="seats-col"><span id="AR|R:${t.slice(1)}" class="seat-current-pvr" data-seat="${t.slice(1)}">${t.slice(1)}</span></td>`
+        : `<td class="seats-col"><span class="seat-disable">${t.slice(1)}</span></td>`;
+  return `<div class="screen"><h6>Screen</h6></div>
+  <div class="all-seats">${areas.map((a) => `<div class="seat-category-heading"><span class="seat-category-name">${a.name}</span><span class="seat-category-price">(100 + GST)</span></div>
+    <table><tbody>${a.rows.map((r) => `<tr class="seats-row"><td class="seats-col"><span class="seat-row-no area">${r.label}</span></td>${r.pattern.split(' ').map(cell).join('')}<td class="seats-col"><span class="seat-row-no area">${r.label}</span></td></tr>`).join('')}</tbody></table>`).join('')}</div>
+  <div class="summary-movies-photo"><img src="${poster}" alt=""></div>
+  <div class="summary-movies-content"><h5>TEST FILM</h5><p>UA 16+</p><p>Thu, 26 Nov, 10:55 PM - 1:08 AM</p><p>Test Cinema Chennai</p></div>`;
+}
+
+/** PVR's site changes pages without reloading: this shell swaps in the seat page on a button press. */
+export const pvrShellHtml = (seatPage: string) => `<!doctype html><html><head><title>PVR Cinemas</title><style>
+  body{font-family:sans-serif;margin:40px} table{border-collapse:separate;border-spacing:6px} .seats-col span{display:inline-grid;place-items:center;width:26px;height:26px;border:1px solid #999;font-size:11px}
+  .seat_hidden{visibility:hidden} .seat-disable{background:#ddd} .screen{text-align:center;margin-bottom:30px} .summary-movies-photo img{width:80px}
+  </style></head><body><div id="app"><h1>Showtimes</h1><button id="go">10:55 PM</button></div>
+  <script>
+    document.getElementById('go').onclick = () => { history.pushState({}, '', '/seatlayout/test=='); document.getElementById('app').innerHTML = ${JSON.stringify(seatPage)}; };
+    document.addEventListener('click', e => { const s = e.target.closest('.seat-current-pvr'); if (s) document.body.dataset.pageClick = s.dataset.seat; });
+  </script></body></html>`;

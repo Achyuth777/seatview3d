@@ -1,14 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "SeatView 3D for District (private demo)",
+  "name": "SeatView 3D (private demo)",
   "short_name": "SeatView 3D",
-  "version": "0.1.0",
-  "description": "Private demo: a 3D view from your seat on District's seat map. Not affiliated with District. Not for publication.",
+  "version": "0.2.0",
+  "description": "Private demo: a 3D view from your seat on District and PVR INOX seat maps. Not affiliated with either. Not for publication.",
   "permissions": ["storage"],
-  "host_permissions": ["https://cdn.district.in/*"],
+  "host_permissions": ["https://cdn.district.in/*", "https://*.pvrcinemas.com/*"],
   "content_scripts": [
     {
-      "matches": ["https://www.district.in/movies/*"],
+      "matches": ["https://www.district.in/movies/*", "https://www.pvrcinemas.com/*"],
       "js": ["content.js"],
       "run_at": "document_idle"
     }
@@ -16,11 +16,11 @@
   "web_accessible_resources": [
     {
       "resources": ["viewer.html", "assets/*"],
-      "matches": ["https://www.district.in/*"]
+      "matches": ["https://www.district.in/*", "https://www.pvrcinemas.com/*"]
     }
   ],
   "icons": { "128": "icon-128.png" },
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; img-src 'self' blob: data:; connect-src 'self' https://cdn.district.in"
+    "extension_pages": "script-src 'self'; object-src 'self'; img-src 'self' blob: data:; connect-src 'self' https://cdn.district.in https://*.pvrcinemas.com"
   }
 }

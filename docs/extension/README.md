@@ -1,6 +1,14 @@
-# SeatView 3D for District (private demo)
+# SeatView 3D (private demo)
 
-A browser extension that adds a **3D seat view** to District's seat-selection page. Turn the switch on, point at any seat on District's own map, and a side panel shows the view from that seat, with the film's banner on the screen. Booking and payment stay entirely on District.
+A browser extension that adds a **3D seat view** to cinema seat-selection pages. Turn the switch on, point at any seat on the site's own map, and a side panel shows the view from that seat, with the film's image on the screen. Booking and payment stay entirely on the site.
+
+| Site | Status |
+|---|---|
+| **District** (district.in) | Works. Checked on real seat maps on 25 Nov 2026 (PVR Palazzo; Kamala Cinemas with couple seats). Film banner from District's cinema/film pages. |
+| **PVR INOX** (pvrcinemas.com) | Works. Reader built from PVR Palazzo's real seat page (26 Nov 2026); tested on that real layout (12 rows, aisles, short front row). Poster comes from the seat page itself. PVR's site opens the seat page without reloading, and the switch follows it. A live run with the extension stopped at PVR's payment-notice pop-up, which needs "Accept" from you. |
+| **BookMyShow** | Not yet. BookMyShow blocks automated browsers ("Sorry, you have been blocked"), and SeatView doesn't get around that. To add it, save a BookMyShow seat page from your own browser (Ctrl+S, "Webpage, HTML only") and the reader can be built from that file. |
+
+Each site has a small reader in `src/extension/sites.ts`; the 3D hall, panel and figures are shared.
 
 **Status: private demo.** It is not published to the Chrome Web Store and must not be, without District's written permission (see "Before going further").
 

@@ -69,11 +69,21 @@ export function makePictureTexture(img: ImageBitmap | HTMLImageElement, aspect: 
   c.height = H;
   const g = c.getContext('2d')!;
   const iw = img.width, ih = img.height;
-  const scale = Math.max(W / iw, H / ih);
-  const dw = iw * scale, dh = ih * scale;
   g.fillStyle = '#000';
   g.fillRect(0, 0, W, H);
-  g.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+  if (iw < ih) {
+    // A portrait poster: show it whole, centred, over a dimmed, blurred copy filling the screen.
+    const cover = Math.max(W / iw, H / ih);
+    g.filter = 'blur(40px) brightness(0.45)';
+    g.drawImage(img, (W - iw * cover) / 2, (H - ih * cover) / 2, iw * cover, ih * cover);
+    g.filter = 'none';
+    const fit = H / ih;
+    g.drawImage(img, (W - iw * fit) / 2, 0, iw * fit, H);
+  } else {
+    const scale = Math.max(W / iw, H / ih);
+    const dw = iw * scale, dh = ih * scale;
+    g.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+  }
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
