@@ -63,21 +63,115 @@ const storyHtml = `<!doctype html><html><head><meta name="viewport" content="wid
     window.card = (html) => { const k = document.getElementById('card'); if (html === null) { k.style.opacity = 0; return; } k.firstElementChild.innerHTML = html; k.style.opacity = 1; };
   </script></body></html>`;
 
-// ---- Turns recorded frames into a standard H.264 MP4 inside the browser (WebCodecs + mp4-muxer). ----
+// ---- Turns recorded frames into a standard H.264 + AAC MP4 inside the browser (WebCodecs + mp4-muxer). ----
 // Frames are placed on an exact 30 fps timeline (each output frame shows the latest captured frame),
 // and the file is written with its index at the front ("fast start"), as Instagram expects.
+// The soundtrack is generated here (Web Audio), so it is original: a short synth track plus a tap,
+// a whoosh and a chime placed at the moments recorded in `events`.
 const FPS = 30;
 const encoderHtml = `<!doctype html><html><body><script src="https://story.local/mp4-muxer.js"></script><script>
-  window.encode = async (times, fps) => {
+  const SR = 48000;
+
+  /** An original 112 BPM synth loop (C, G, Am, F) with sound effects at the given moments. */
+  async function soundtrack(duration, events) {
+    const ctx = new OfflineAudioContext(2, Math.ceil(duration * SR), SR);
+    const master = ctx.createGain();
+    const comp = ctx.createDynamicsCompressor();
+    master.connect(comp); comp.connect(ctx.destination);
+    const end = duration;
+    const drumsIn = (events.find((e) => e.kind === 'start') || { t: 2.6 }).t;
+    const outro = (events.find((e) => e.kind === 'card') || { t: end - 3 }).t;
+    master.gain.setValueAtTime(0, 0);
+    master.gain.linearRampToValueAtTime(0.85, 1.2);
+    master.gain.setValueAtTime(0.85, end - 1.4);
+    master.gain.linearRampToValueAtTime(0, end);
+
+    const noise = ctx.createBuffer(1, SR, SR);
+    { const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+    const hz = (midi) => 440 * 2 ** ((midi - 69) / 12);
+    const env = (g, t, a, peak, dec) => { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + dec); };
+    const tone = (type, f, t, a, peak, dec, dest = master, pan = 0) => {
+      const o = ctx.createOscillator(), g = ctx.createGain(), p = ctx.createStereoPanner();
+      o.type = type; o.frequency.setValueAtTime(f, t); p.pan.value = pan;
+      env(g, t, a, peak, dec); o.connect(g); g.connect(p); p.connect(dest); o.start(t); o.stop(t + a + dec + 0.05);
+    };
+    const hiss = (t, dur, peak, filterType, f0, f1, pan = 0) => {
+      const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(), p = ctx.createStereoPanner();
+      s.buffer = noise; s.loop = true; f.type = filterType; f.Q.value = 1.2;
+      f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + dur * 0.4); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      p.pan.value = pan; s.connect(f); f.connect(g); g.connect(p); p.connect(master); s.start(t); s.stop(t + dur + 0.05);
+    };
+
+    // Music.
+    const beat = 60 / 112;
+    const chords = [[60, 64, 67], [55, 59, 62], [57, 60, 64], [53, 57, 60]]; // C, G, Am, F
+    const padBus = ctx.createBiquadFilter(); padBus.type = 'lowpass'; padBus.frequency.value = 1400; padBus.connect(master);
+    for (let bar = 0; bar * 4 * beat < outro + 4 * beat; bar++) {
+      const t0 = bar * 4 * beat;
+      if (t0 >= end) break;
+      const ch = chords[bar % 4];
+      for (const [k, n] of ch.entries()) tone('sawtooth', hz(n), t0, 0.08, 0.035, 4 * beat, padBus, (k - 1) * 0.4);
+      for (let s = 0; s < 8; s++) {
+        const t = t0 + s * beat / 2;
+        if (t >= end) break;
+        // Pluck arpeggio, brighter once the demo starts.
+        tone('triangle', hz(ch[[0, 1, 2, 1][s % 4]] + 12 + (s >= 4 ? 12 : 0)), t, 0.005, t < drumsIn ? 0.05 : 0.08, 0.22, master, s % 2 ? 0.3 : -0.3);
+        if (t < drumsIn || t > outro + 0.2) continue;
+        if (s % 2 === 0) { // kick on the beat
+          const o = ctx.createOscillator(), g = ctx.createGain();
+          o.frequency.setValueAtTime(130, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.14);
+          env(g, t, 0.003, 0.75, 0.26); o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.32);
+          tone('sine', hz(ch[0] - 24), t, 0.01, 0.22, beat * 0.8); // bass
+        } else {
+          hiss(t, 0.06, 0.05, 'highpass', 7000, 9000, 0.2); // hi-hat
+        }
+        if (s === 2 || s === 6) hiss(t, 0.16, 0.09, 'bandpass', 1800, 1200); // snare-ish clap
+      }
+    }
+
+    // Sound effects at the recorded moments.
+    for (const e of events) {
+      if (e.kind === 'tap') { tone('sine', 1320, e.t, 0.003, 0.35, 0.09); hiss(e.t, 0.04, 0.12, 'highpass', 3000, 4000); }
+      if (e.kind === 'whoosh') hiss(e.t, 0.75, 0.16, 'bandpass', 350, 2800, 0);
+      if (e.kind === 'card') for (const [i, n] of [72, 76, 79, 84].entries()) tone('sine', hz(n), e.t + i * 0.09, 0.01, 0.16, 1.4, master, (i - 1.5) * 0.3);
+    }
+    return ctx.startRendering();
+  }
+
+  window.encode = async (times, fps, events) => {
     const { Muxer, ArrayBufferTarget } = Mp4Muxer;
     const W = 1080, H = 1920;
-    const muxer = new Muxer({ target: new ArrayBufferTarget(), video: { codec: 'avc', width: W, height: H, frameRate: fps }, fastStart: 'in-memory' });
+    const total = Math.round(times.at(-1) * fps) + Math.round(0.5 * fps);
+    const duration = total / fps;
+    const muxer = new Muxer({
+      target: new ArrayBufferTarget(), fastStart: 'in-memory',
+      video: { codec: 'avc', width: W, height: H, frameRate: fps },
+      audio: { codec: 'aac', sampleRate: SR, numberOfChannels: 2 },
+    });
     let failed = null;
-    const encoder = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: (e) => { failed = e; } });
+    const onError = (e) => { failed = e; };
+
+    // Sound.
+    const audio = await soundtrack(duration, events);
+    const aenc = new AudioEncoder({ output: (chunk, meta) => muxer.addAudioChunk(chunk, meta), error: onError });
+    aenc.configure({ codec: 'mp4a.40.2', sampleRate: SR, numberOfChannels: 2, bitrate: 192000 });
+    const L = audio.getChannelData(0), R = audio.getChannelData(1);
+    for (let i = 0; i < audio.length; i += 1024) {
+      const n = Math.min(1024, audio.length - i);
+      const data = new Float32Array(n * 2);
+      data.set(L.subarray(i, i + n), 0); data.set(R.subarray(i, i + n), n);
+      const chunk = new AudioData({ format: 'f32-planar', sampleRate: SR, numberOfFrames: n, numberOfChannels: 2, timestamp: Math.round(i / SR * 1e6), data });
+      aenc.encode(chunk); chunk.close();
+    }
+    await aenc.flush();
+    if (failed) throw failed;
+
+    // Picture.
+    const encoder = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: onError });
     encoder.configure({ codec: 'avc1.640028', width: W, height: H, bitrate: 10_000_000, framerate: fps, avc: { format: 'avc' } });
     const canvas = new OffscreenCanvas(W, H), g = canvas.getContext('2d');
     const load = (i) => fetch('https://story.local/frame/' + i).then((r) => r.blob()).then(createImageBitmap);
-    const total = Math.round(times.at(-1) * fps) + Math.round(0.5 * fps);
     let src = 0, shown = -1;
     for (let k = 0; k < total; k++) {
       const t = k / fps;
@@ -93,7 +187,7 @@ const encoderHtml = `<!doctype html><html><body><script src="https://story.local
     muxer.finalize();
     const buf = muxer.target.buffer;
     await fetch('https://story.local/upload', { method: 'POST', body: buf });
-    return { size: buf.byteLength, frames: total };
+    return { size: buf.byteLength, frames: total, audioSeconds: audio.duration };
   };
 </script></body></html>`;
 
@@ -145,31 +239,43 @@ try {
   const seat = (row, n) => page.locator('tr.seats-row').nth(row).locator(`[data-seat="${n}"]`);
   const arrive = async (id) => { await main.locator(`xpath=self::*[@data-camera-seat="${id}"]`).waitFor({ timeout: 15_000 }).catch(() => {}); };
 
+  // Moments for the sound effects, on the same clock as the frames (seconds since the epoch).
+  const events = [];
+  const mark = (kind) => events.push({ kind, t: Date.now() / 1000 });
+
   await sleep(2600);                                   // title card
   await page.evaluate(() => { window.card(null); window.caption('1. Turn on 3D seat view'); });
+  mark('start');
   await sleep(900);
   await move(toggle);
   await sleep(300);
+  mark('tap');
   await toggle.click();                                 // our own switch
   await main.locator('xpath=self::*[@data-rows]').waitFor({ timeout: 20_000 });
   await sleep(1800);
   await page.evaluate(() => window.caption('2. Point at any seat: front row'));
   await move(seat(0, 3));                               // front row L
+  mark('whoosh');                                       // the camera flies to the seat
   await arrive('L3');
   await sleep(1700);
   await page.evaluate(() => window.caption('Middle: the sweet spot'));
   await move(seat(5, 10));                              // middle, row G
+  mark('whoosh');
   await arrive('G10');
   await sleep(1700);
   await page.evaluate(() => window.caption('Back row: the whole screen'));
   await move(seat(11, 13));                             // back row A
+  mark('whoosh');
   await arrive('A13');
   await sleep(1700);
   await page.evaluate(() => window.caption('3. Tap to keep your pick'));
   await move(seat(4, 13));                              // row H, middle
+  mark('tap');
+  mark('whoosh');
   await page.mouse.down(); await sleep(120); await page.mouse.up();
   await arrive('H13');
   await sleep(2000);
+  mark('card');
   await page.evaluate(() => window.card('<h1>SEATVIEW 3D</h1><p>Works right on the seat map<br>of District and PVR INOX</p><small>Private demo · rebuilt from the real seat layout · sizes estimated</small>'));
   await sleep(3200);
   await cdp.send('Page.stopScreencast');
@@ -181,8 +287,9 @@ try {
 
   const enc = await ctx.newPage();
   await enc.goto('https://story.local/encode');
-  const { size, frames: written } = await enc.evaluate(([ts, fps]) => window.encode(ts, fps), [times, FPS]);
-  console.log(`encoded ${written} frames at ${FPS} fps`);
+  const cues = events.map((e) => ({ kind: e.kind, t: Math.max(0, e.t - t0) }));
+  const { size, frames: written, audioSeconds } = await enc.evaluate(([ts, fps, ev]) => window.encode(ts, fps, ev), [times, FPS, cues]);
+  console.log(`encoded ${written} frames at ${FPS} fps, ${audioSeconds.toFixed(1)} s of sound; cues: ${cues.map((c) => `${c.kind}@${c.t.toFixed(1)}`).join(' ')}`);
   if (!upload) throw new Error('The encoder did not hand back the video');
   mkdirSync(resolve('docs/extension'), { recursive: true });
   writeFileSync(OUT, upload);
