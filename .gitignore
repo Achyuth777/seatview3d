@@ -19,3 +19,4 @@ extension-dist
 # Demo recordings of the real District site (their page and film artwork): kept local
 docs/extension/demo.webm
 docs/extension/live-*.png
+docs/extension/seatview-story.mp4
